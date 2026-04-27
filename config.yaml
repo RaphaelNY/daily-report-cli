@@ -1,0 +1,32 @@
+# `daily_git` 默认配置文件示例
+# 优先级：CLI 参数 > config.yaml > 内置默认值
+
+# 目标仓库路径；相对路径以当前配置文件所在目录为基准
+repo: .
+
+# 可选：自定义作者过滤
+# author: Raphael
+
+# 可选：自定义模板；默认使用本仓库内的中文模板
+template: ./templates/周报与日报_markdown_模板.md
+
+# 输出目录；如果同时配置 `output` 和 `output_dir` 会报错
+output_dir: ./reports
+
+# 可选：固定引用的项目文档列表；留空时自动扫描 README / docs
+docs: []
+
+# 文档采样设置
+max_docs: 6
+max_doc_chars: 280
+
+polish:
+  enabled: true
+  # model: gpt-5
+  timeout_secs: 90
+  # codex_home: /Users/yourname/.codex
+
+daily: {}
+
+weekly:
+  days: 7

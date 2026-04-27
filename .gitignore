@@ -1,0 +1,4 @@
+/target
+/.cargo-home
+/.codex-home
+.DS_Store

@@ -1,0 +1,16 @@
+//! `daily_git` library entry point.
+//!
+//! 该库负责：
+//! - 收集目标仓库的 Git 提交
+//! - 扫描关联项目文档
+//! - 按模板生成 Markdown 日报 / 周报
+//! - 默认尝试调用本机 `codex` 做自然语言润色
+
+mod collectors;
+mod config;
+mod core;
+mod reporting;
+
+pub use config::{load_config, LoadedConfig, ReportFileConfig};
+pub use core::types::{GeneratedReport, PolishOptions, PolishState, ReportKind, ReportRequest};
+pub use reporting::generate_report;

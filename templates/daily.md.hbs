@@ -1,0 +1,56 @@
+# {{repo.name}} {{report.title}}（{{report.start_date}}）
+
+- 生成时间：{{generated_at}}
+- 仓库路径：`{{repo.path}}`
+- 当前分支：`{{repo.branch}}`
+- 提交数量：{{report.commit_count}}
+- 涉及文件：{{report.file_count}}
+- 主要模块：{{summary.modules_display}}
+
+## 工作汇总
+{{#if summary.highlights}}
+{{#each summary.highlights}}
+- {{this}}
+{{/each}}
+{{else}}
+- 当日没有匹配到提交记录。
+{{/if}}
+
+## 提交明细
+{{#if commits}}
+{{#each commits}}
+### {{short_hash}} {{subject}}
+- 作者：{{author}} <{{email}}>
+- 日期：{{date}}
+- 影响模块：{{modules_display}}
+- 变更文件：{{files_display}}
+{{#if body}}
+
+{{body}}
+{{/if}}
+
+{{/each}}
+{{else}}
+暂无提交明细。
+{{/if}}
+
+## 文档参考
+{{#if docs}}
+{{#each docs}}
+### {{title}}
+- 文档路径：`{{path}}`
+- 摘要：{{excerpt}}
+
+{{/each}}
+{{else}}
+- 未发现可用项目文档。
+{{/if}}
+
+## 风险与跟进
+{{#if summary.risks}}
+{{#each summary.risks}}
+- {{this}}
+{{/each}}
+{{else}}
+- 暂未从提交信息中识别到显式风险项。
+{{/if}}
