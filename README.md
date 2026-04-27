@@ -33,6 +33,88 @@ cargo build --release
 daily_git --config ./config.yaml daily
 ```
 
+如果只是想在另一台设备上使用，不一定需要重新安装 Rust。这个项目已经适合按“预编译二进制 + 压缩包”分发。
+
+## 分发到其他设备
+
+推荐分发内容：
+
+- `daily_git` 可执行文件
+- `config.example.yaml` 示例配置
+- `templates/` 目录
+- `README.md` 与 `LICENSE`
+
+其中：
+
+- 默认日报 / 周报模板已经内置到二进制里
+- `templates/周报与日报_markdown_模板.md` 仍然是外部文件；如果你依赖这个中文模板，分发时要一起带上
+- `codex` CLI 仅用于润色；目标机器没有安装也能正常生成报告，只是会跳过润色
+
+### 本地打包
+
+macOS / Linux 上可以直接执行：
+
+```bash
+./scripts/package-release.sh
+```
+
+脚本会：
+
+- 执行 `cargo build --locked --release`
+- 将二进制、模板、示例配置、说明文件打进一个压缩包
+- 在 `target/packages/` 下生成类似下面的文件
+
+```bash
+target/packages/daily_git-0.1.0-aarch64-apple-darwin.tar.gz
+```
+
+如果你需要为当前机器以外的 Rust target 打包，可以显式传入 target triple：
+
+```bash
+./scripts/package-release.sh x86_64-apple-darwin
+```
+
+### 目标机器安装
+
+拿到压缩包后，目标机器只需要：
+
+1. 解压
+2. 把 `daily_git` 放到某个在 `PATH` 里的目录，例如 `/usr/local/bin/`
+3. 按需拷贝 `config.example.yaml` 并改成自己的 `config.yaml`
+4. 如果需要润色功能，再单独安装并登录 `codex`
+
+例如：
+
+```bash
+tar -xzf daily_git-0.1.0-aarch64-apple-darwin.tar.gz
+cp daily_git-0.1.0-aarch64-apple-darwin/daily_git /usr/local/bin/
+chmod +x /usr/local/bin/daily_git
+```
+
+### 自动发布 Release
+
+仓库里已经增加了 GitHub Actions 工作流 [`.github/workflows/release.yml`](.github/workflows/release.yml)，支持：
+
+- macOS Intel: `x86_64-apple-darwin`
+- macOS Apple Silicon: `aarch64-apple-darwin`
+- Linux x86_64: `x86_64-unknown-linux-gnu`
+- Windows x86_64: `x86_64-pc-windows-msvc`
+
+触发方式：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+之后 GitHub Release 会自动附带对应平台的压缩包。对“在别的设备上获取这个工具”来说，这是最省事、维护成本最低的路径。
+
+### 其他可选方案
+
+- `cargo install --git <repo-url>`：适合开发者设备，但要求目标机器先装 Rust
+- Homebrew tap：适合长期给多台 macOS 设备分发，但维护成本高于直接发 Release
+- 只同步源码：最简单，但每台设备都要重新编译，不适合非开发环境
+
 ## 常用命令
 
 生成日报：
