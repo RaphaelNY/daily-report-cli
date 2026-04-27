@@ -28,6 +28,7 @@ ARCHIVE_BASENAME="${PACKAGE_NAME}-${VERSION}-${TARGET_TRIPLE}"
 STAGE_ROOT="$ROOT_DIR/target/package"
 STAGE_DIR="$STAGE_ROOT/$ARCHIVE_BASENAME"
 ARCHIVE_PATH="$ROOT_DIR/target/packages/${ARCHIVE_BASENAME}.tar.gz"
+INSTALLER_PATH="$ROOT_DIR/target/packages/daily_git-installer.sh"
 
 rm -rf "$STAGE_DIR"
 mkdir -p "$STAGE_DIR/templates" "$(dirname "$ARCHIVE_PATH")"
@@ -38,7 +39,10 @@ cp "$ROOT_DIR/target/$TARGET_TRIPLE/release/$PACKAGE_NAME" "$STAGE_DIR/"
 cp "$ROOT_DIR/README.md" "$ROOT_DIR/LICENSE" "$STAGE_DIR/"
 cp "$ROOT_DIR/config.yaml" "$STAGE_DIR/config.example.yaml"
 cp "$ROOT_DIR/templates/"* "$STAGE_DIR/templates/"
+cp "$ROOT_DIR/scripts/install.sh" "$INSTALLER_PATH"
+chmod +x "$INSTALLER_PATH"
 
 tar -C "$STAGE_ROOT" -czf "$ARCHIVE_PATH" "$ARCHIVE_BASENAME"
 
 echo "$ARCHIVE_PATH"
+echo "$INSTALLER_PATH"

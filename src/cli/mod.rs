@@ -11,6 +11,7 @@ use clap::{Args, Parser, Subcommand};
 
 use daily_git::{
     load_config, LoadedConfig, PolishOptions, ReportFileConfig, ReportKind, ReportRequest,
+    UpdateOptions,
 };
 
 /// 顶层命令定义。
@@ -28,10 +29,16 @@ pub(crate) struct Cli {
     command: Command,
 }
 
+pub(crate) enum AppCommand {
+    Generate(ReportRequest),
+    Update(UpdateOptions),
+}
+
 #[derive(Subcommand, Debug)]
 enum Command {
     Daily(DailyArgs),
     Weekly(WeeklyArgs),
+    Update(UpdateArgs),
 }
 
 #[derive(Args, Debug)]
@@ -97,9 +104,24 @@ struct WeeklyArgs {
     days: Option<i64>,
 }
 
+#[derive(Args, Debug)]
+struct UpdateArgs {
+    #[arg(long)]
+    check: bool,
+
+    #[arg(long)]
+    version: Option<String>,
+
+    #[arg(long)]
+    force: bool,
+
+    #[arg(long, hide = true)]
+    release_repo: Option<String>,
+}
+
 impl Cli {
     /// 将命令行参数转换成内部请求对象。
-    pub(crate) fn into_request(self) -> Result<ReportRequest> {
+    pub(crate) fn into_command(self) -> Result<AppCommand> {
         let loaded_config = load_config(self.config.as_deref())?;
         match self.command {
             Command::Daily(args) => {
@@ -112,6 +134,7 @@ impl Cli {
                     })
                     .unwrap_or_else(|| Local::now().date_naive());
                 build_request(args.common, ReportKind::Daily, date, date, loaded_config)
+                    .map(AppCommand::Generate)
             }
             Command::Weekly(args) => {
                 let end_date = args
@@ -141,7 +164,14 @@ impl Cli {
                     end_date,
                     loaded_config,
                 )
+                .map(AppCommand::Generate)
             }
+            Command::Update(args) => Ok(AppCommand::Update(UpdateOptions {
+                check_only: args.check,
+                requested_version: args.version,
+                force: args.force,
+                release_repo: args.release_repo,
+            })),
         }
     }
 }

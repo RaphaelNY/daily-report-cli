@@ -91,9 +91,28 @@ jobs:
           name: ${{ steps.meta.outputs.package }}
           path: dist/${{ steps.meta.outputs.package }}.${{ matrix.archive_ext }}
 
+  installer:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Stage installer script
+        run: |
+          mkdir -p dist
+          cp scripts/install.sh dist/daily_git-installer.sh
+          chmod +x dist/daily_git-installer.sh
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily_git-installer
+          path: dist/daily_git-installer.sh
+
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, installer]
     runs-on: ubuntu-24.04
 
     steps:
@@ -101,7 +120,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: release-assets
-          pattern: daily_git-*
+          pattern: daily_git*
           merge-multiple: true
 
       - name: Publish GitHub release assets

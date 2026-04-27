@@ -39,15 +39,14 @@ daily_git --config ./config.yaml daily
 
 推荐分发内容：
 
-- `daily_git` 可执行文件
-- `config.example.yaml` 示例配置
-- `templates/` 目录
-- `README.md` 与 `LICENSE`
+- 平台压缩包：`daily_git-<version>-<target>.tar.gz`
+- 安装脚本：`daily_git-installer.sh`
 
 其中：
 
-- 默认日报 / 周报模板已经内置到二进制里
-- `templates/周报与日报_markdown_模板.md` 仍然是外部文件；如果你依赖这个中文模板，分发时要一起带上
+- 默认日报 / 周报模板已经内置到二进制里，但中文模板 `templates/周报与日报_markdown_模板.md` 仍然作为共享资源一起发布
+- 安装脚本会把文件安装到 `<prefix>/bin` 与 `<prefix>/share/daily_git`
+- 如果 `<prefix>/bin` 不在当前 PATH 中，安装脚本会自动向 shell 启动文件追加 PATH 配置
 - `codex` CLI 仅用于润色；目标机器没有安装也能正常生成报告，只是会跳过润色
 
 ### 本地打包
@@ -61,11 +60,13 @@ macOS / Linux 上可以直接执行：
 脚本会：
 
 - 执行 `cargo build --locked --release`
-- 将二进制、模板、示例配置、说明文件打进一个压缩包
+- 生成平台压缩包
+- 复制安装脚本到 `target/packages/`
 - 在 `target/packages/` 下生成类似下面的文件
 
 ```bash
 target/packages/daily_git-0.1.0-aarch64-apple-darwin.tar.gz
+target/packages/daily_git-installer.sh
 ```
 
 如果你需要为当前机器以外的 Rust target 打包，可以显式传入 target triple：
@@ -76,20 +77,59 @@ target/packages/daily_git-0.1.0-aarch64-apple-darwin.tar.gz
 
 ### 目标机器安装
 
-拿到压缩包后，目标机器只需要：
-
-1. 解压
-2. 把 `daily_git` 放到某个在 `PATH` 里的目录，例如 `/usr/local/bin/`
-3. 按需拷贝 `config.example.yaml` 并改成自己的 `config.yaml`
-4. 如果需要润色功能，再单独安装并登录 `codex`
-
-例如：
+最推荐的方式是直接使用 release 安装脚本：
 
 ```bash
-tar -xzf daily_git-0.1.0-aarch64-apple-darwin.tar.gz
-cp daily_git-0.1.0-aarch64-apple-darwin/daily_git /usr/local/bin/
-chmod +x /usr/local/bin/daily_git
+curl -fsSL https://github.com/RaphaelNY/daily-report-cli/releases/latest/download/daily_git-installer.sh | bash -s -- --prefix "$HOME/.local"
 ```
+
+也可以安装指定版本：
+
+```bash
+curl -fsSL https://github.com/RaphaelNY/daily-report-cli/releases/latest/download/daily_git-installer.sh | bash -s -- --prefix "$HOME/.local" --version 0.1.0
+```
+
+安装脚本支持：
+
+- `--prefix <DIR>`：指定安装根目录，实际会写入 `<DIR>/bin` 与 `<DIR>/share/daily_git`
+- `--version <VER>`：安装指定 release 版本
+- `--archive <PATH>`：从本地压缩包离线安装
+- `--skip-path`：跳过 PATH 修改
+
+如果你已经手里有压缩包，也可以离线安装：
+
+```bash
+bash ./daily_git-installer.sh \
+  --archive ./daily_git-0.1.0-aarch64-apple-darwin.tar.gz \
+  --prefix "$HOME/.local"
+```
+
+安装完成后：
+
+- 可执行文件位于 `<prefix>/bin/daily_git`
+- 模板和示例配置位于 `<prefix>/share/daily_git`
+- 如果 PATH 不是立刻生效，重新打开 shell，或手动 `source ~/.zshrc` / `source ~/.bashrc`
+
+手工解压并复制二进制仍然可行，但已经不再是推荐路径。
+
+### 自更新
+
+安装完成后，可以直接用 CLI 自更新：
+
+```bash
+daily_git update
+daily_git update --check
+daily_git update --version 0.1.0
+```
+
+说明：
+
+- `daily_git update` 会从 GitHub Release 下载当前平台的最新包并原地替换当前可执行文件
+- `daily_git update --check` 只检查，不执行安装
+- `daily_git update --version <VER>` 可回退或切换到指定版本
+- 当前 `update` 支持 Linux/macOS 的安装包目标
+- 在该命令真正可用之前，仓库本身需要先发布至少一个 GitHub Release
+- 如果你把工具装到了系统目录，例如 `/usr/local/bin`，更新时需要当前用户对该路径有写权限
 
 ### 自动发布 Release
 
@@ -107,7 +147,12 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-之后 GitHub Release 会自动附带对应平台的压缩包。对“在别的设备上获取这个工具”来说，这是最省事、维护成本最低的路径。
+之后 GitHub Release 会自动附带：
+
+- 对应平台的压缩包
+- `daily_git-installer.sh` 安装脚本
+
+对“在别的设备上获取这个工具”来说，这已经是最省事、维护成本最低的路径。
 
 ### 其他可选方案
 
