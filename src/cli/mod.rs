@@ -22,9 +22,6 @@ use daily_git::{
     about = "Generate daily and weekly Git markdown reports from commits and project docs."
 )]
 pub(crate) struct Cli {
-    #[arg(long, global = true)]
-    config: Option<PathBuf>,
-
     #[command(subcommand)]
     command: Command,
 }
@@ -47,6 +44,9 @@ enum Command {
 
 #[derive(Args, Debug)]
 struct CommonArgs {
+    #[arg(long)]
+    config: Option<PathBuf>,
+
     #[arg(long = "repo")]
     repos: Vec<PathBuf>,
 
@@ -193,9 +193,9 @@ struct UpdateArgs {
 impl Cli {
     /// 将命令行参数转换成内部请求对象。
     pub(crate) fn into_command(self) -> Result<AppCommand> {
-        let Cli { config, command } = self;
-        match command {
+        match self.command {
             Command::Daily(args) => {
+                let config = args.common.config.clone();
                 let loaded_config = load_config(config.as_deref())?;
                 let json = args.common.json;
                 let date = args
@@ -217,6 +217,7 @@ impl Cli {
                 .map(|request| AppCommand::Generate { request, json })
             }
             Command::Weekly(args) => {
+                let config = args.common.config.clone();
                 let loaded_config = load_config(config.as_deref())?;
                 let json = args.common.json;
                 let end_date = args
@@ -254,6 +255,7 @@ impl Cli {
                 .map(|request| AppCommand::Generate { request, json })
             }
             Command::Doctor(args) => {
+                let config = args.common.config.clone();
                 let loaded_config = load_config(config.as_deref())?;
                 let json = args.common.json;
                 let today = Local::now().date_naive();
@@ -351,6 +353,7 @@ fn build_request(
     validate_output_conflict(&common, config_values)?;
 
     let CommonArgs {
+        config: _,
         repos,
         template,
         output,
