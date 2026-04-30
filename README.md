@@ -78,7 +78,7 @@ macOS / Linux 上可以直接执行：
 - 在 `target/packages/` 下生成类似下面的文件
 
 ```bash
-target/packages/daily_git-0.1.0-aarch64-apple-darwin.tar.gz
+target/packages/daily_git-0.1.1-aarch64-apple-darwin.tar.gz
 target/packages/daily_git-installer.sh
 ```
 
@@ -99,7 +99,7 @@ curl -fsSL https://github.com/RaphaelNY/daily-report-cli/releases/latest/downloa
 也可以安装指定版本：
 
 ```bash
-curl -fsSL https://github.com/RaphaelNY/daily-report-cli/releases/latest/download/daily_git-installer.sh | bash -s -- --prefix "$HOME/.local" --version 0.1.0
+curl -fsSL https://github.com/RaphaelNY/daily-report-cli/releases/latest/download/daily_git-installer.sh | bash -s -- --prefix "$HOME/.local" --version 0.1.1
 ```
 
 安装脚本支持：
@@ -113,7 +113,7 @@ curl -fsSL https://github.com/RaphaelNY/daily-report-cli/releases/latest/downloa
 
 ```bash
 bash ./daily_git-installer.sh \
-  --archive ./daily_git-0.1.0-aarch64-apple-darwin.tar.gz \
+  --archive ./daily_git-0.1.1-aarch64-apple-darwin.tar.gz \
   --prefix "$HOME/.local"
 ```
 
@@ -132,7 +132,7 @@ bash ./daily_git-installer.sh \
 ```bash
 daily_git update
 daily_git update --check
-daily_git update --version 0.1.0
+daily_git update --version 0.1.1
 ```
 
 说明：
@@ -155,8 +155,8 @@ daily_git update --version 0.1.0
 触发方式：
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 之后 GitHub Release 会自动附带：
