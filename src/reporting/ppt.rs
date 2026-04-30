@@ -877,6 +877,8 @@ mod tests {
                 },
             ],
             docs: vec![DocumentInfo {
+                repo_name: "demo-repo".to_string(),
+                repo_path: "/tmp/demo-repo".to_string(),
                 path: "README.md".to_string(),
                 title: "README".to_string(),
                 excerpt: "Project overview".to_string(),

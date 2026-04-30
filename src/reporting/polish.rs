@@ -33,20 +33,12 @@ pub(crate) fn summarize_commits(
 
     match check_codex_ready(options) {
         CodexReady::Ready => {}
-        CodexReady::Skipped(_) => {
-            return commits
-                .iter()
-                .map(|commit| commit.subject.clone())
-                .collect()
-        }
+        CodexReady::Skipped(_) => return commits.iter().map(fallback_summary).collect(),
     }
 
     match run_codex_exec(options, repo, build_commit_summaries_prompt(commits)) {
         Ok(raw) => parse_commit_summaries(&raw, commits),
-        Err(_) => commits
-            .iter()
-            .map(|commit| commit.subject.clone())
-            .collect(),
+        Err(_) => commits.iter().map(fallback_summary).collect(),
     }
 }
 
@@ -254,17 +246,11 @@ fn parse_commit_summaries(raw: &str, commits: &[CommitInfo]) -> Vec<String> {
         .and_then(|value| value.as_array().cloned());
 
     let Some(items) = parsed else {
-        return commits
-            .iter()
-            .map(|commit| commit.subject.clone())
-            .collect();
+        return commits.iter().map(fallback_summary).collect();
     };
 
     if items.len() != commits.len() {
-        return commits
-            .iter()
-            .map(|commit| commit.subject.clone())
-            .collect();
+        return commits.iter().map(fallback_summary).collect();
     }
 
     items
@@ -272,10 +258,61 @@ fn parse_commit_summaries(raw: &str, commits: &[CommitInfo]) -> Vec<String> {
         .zip(commits.iter())
         .map(|(item, commit)| {
             item.as_str()
-                .map(|summary| normalize_summary(summary, &commit.subject))
-                .unwrap_or_else(|| commit.subject.clone())
+                .map(|summary| normalize_summary(summary, &fallback_summary(commit)))
+                .unwrap_or_else(|| fallback_summary(commit))
         })
         .collect()
+}
+
+fn fallback_summary(commit: &CommitInfo) -> String {
+    let cleaned = simplify_subject(&commit.subject);
+    if cleaned.is_empty() {
+        return commit.subject.clone();
+    }
+
+    let modules = if commit.modules.is_empty() {
+        String::new()
+    } else {
+        format!("（{}）", commit.modules_display)
+    };
+
+    format!("{}{}", cleaned, modules)
+}
+
+fn simplify_subject(subject: &str) -> String {
+    let trimmed = subject.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    let normalized = trimmed
+        .split_once(':')
+        .map(|(_, rest)| rest.trim())
+        .filter(|rest| !rest.is_empty())
+        .unwrap_or(trimmed);
+
+    let lowered = normalized.to_ascii_lowercase();
+    let replacements = [
+        ("add ", "新增"),
+        ("support ", "支持"),
+        ("update ", "更新"),
+        ("improve ", "优化"),
+        ("fix ", "修复"),
+        ("preserve ", "保留"),
+        ("drop ", "移除"),
+        ("initialize ", "初始化"),
+    ];
+
+    for (prefix, chinese) in replacements {
+        if lowered.starts_with(prefix) {
+            let target = normalized[prefix.len()..].trim();
+            if !target.is_empty() {
+                return format!("{}{}", chinese, target);
+            }
+        }
+    }
+
+    normalized.to_string()
 }
 
 fn strip_code_fences(input: &str) -> &str {
@@ -407,5 +444,30 @@ mod tests {
 
         let summaries = parse_commit_summaries("[\"完善命令行入口支持\"]", &commits);
         assert_eq!(summaries, vec!["完善命令行入口支持".to_string()]);
+    }
+
+    #[test]
+    fn fallback_summary_humanizes_subject() {
+        let commit = CommitInfo {
+            repo_name: "demo".to_string(),
+            repo_path: "/tmp/demo".to_string(),
+            hash: "abc".to_string(),
+            short_hash: "abc".to_string(),
+            author: "Alice".to_string(),
+            email: "alice@example.com".to_string(),
+            date: "2025-02-14".to_string(),
+            subject: "feat: add weekly html ppt deck generation".to_string(),
+            summary: String::new(),
+            body: String::new(),
+            files: vec!["src/reporting/ppt.rs".to_string()],
+            files_display: "src/reporting/ppt.rs".to_string(),
+            modules: vec!["src".to_string()],
+            modules_display: "src".to_string(),
+        };
+
+        assert_eq!(
+            fallback_summary(&commit),
+            "新增weekly html ppt deck generation（src）".to_string()
+        );
     }
 }
