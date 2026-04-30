@@ -10,6 +10,8 @@
 - 自动扫描仓库根目录 `README*.md` 与 `docs/`、`doc/` 下的 Markdown 文档
 - 支持通过 `--doc` 显式指定文档路径
 - 支持内置模板，也支持通过 `--template` 指定自定义 Markdown 模板
+- 支持 `--json` 输出机器可读的生成结果，便于 agent 或脚本调用
+- 提供 `skills/daily-git-skill` 作为 agent skill 封装示例
 - 默认尝试调用本机 `codex` CLI 对生成结果做自然语言润色
 - 支持在生成周报 Markdown 的同时，额外产出一份基于 `html-ppt` skill 资产的 HTML PPT deck
 - 在当前目录或指定目录输出 `.md` 报告文件
@@ -338,6 +340,54 @@ weekly:
 - 产物是静态 HTML deck，不是 `.pptx`
 - 当前仅支持周报，不支持日报
 
+## Agent Skill
+
+仓库内提供了一个最小可用的 agent skill 封装：`skills/daily-git-skill`。
+
+它适合让 agent 通过稳定命令生成日报 / 周报，而不是自己拼接和解析 Git 提交。默认行为更偏自动化安全：
+
+- 自动添加 `--json`，输出稳定 JSON
+- 自动添加 `--no-polish`，避免默认依赖 Codex 润色
+- 周报自动添加 `--no-ppt`，除非显式传入 `--ppt`
+- 暴露 `doctor` 预检命令，用于在写文件前检查路径和可选依赖
+- 只暴露 `daily` / `weekly` / `doctor`，不暴露 `update`
+
+预检示例：
+
+```bash
+skills/daily-git-skill/run.sh doctor daily \
+  --repo /path/to/project \
+  --output-dir /path/to/reports
+```
+
+示例：
+
+```bash
+skills/daily-git-skill/run.sh daily \
+  --repo /path/to/project \
+  --date 2026-05-01 \
+  --output-dir /path/to/reports
+```
+
+输出示例：
+
+```json
+{
+  "ok": true,
+  "kind": "daily",
+  "output_path": "/path/to/reports/daily-project-2026-05-01.md",
+  "ppt_path": null,
+  "polish": {
+    "status": "skipped",
+    "message": "润色功能已关闭"
+  }
+}
+```
+
+`doctor` 的 JSON 输出包含 `checks` 数组，每项有 `name`、`status` 和 `message`。如果存在 `fail` 项，命令会以非 0 退出；`warn` 仅表示生成时会回退或自动创建目录。
+
+wrapper 会优先使用当前仓库的 `target/debug/daily_git`，再回退到系统 PATH 中的 `daily_git`。也可以通过 `DAILY_GIT_BIN=/path/to/daily_git` 指定二进制。
+
 ## 模板说明
 
 内置模板位于：
@@ -361,6 +411,8 @@ weekly:
 - `report.commit_count`
 - `report.file_count`
 - `summary.highlights`
+- `summary.work_items`
+- `summary.plan_items`
 - `summary.modules`
 - `summary.modules_display`
 - `summary.risks`
@@ -378,6 +430,7 @@ weekly:
 - `body`
 - `files`
 - `files_display`
+- `files_compact_display`
 - `modules`
 - `modules_display`
 

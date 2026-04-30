@@ -9,13 +9,15 @@
 mod collectors;
 mod config;
 mod core;
+mod doctor;
 mod reporting;
 mod update;
 
 pub use config::{load_config, LoadedConfig, ReportFileConfig};
 pub use core::types::{
-    AuthorMatchMode, GeneratedReport, PolishOptions, PolishState, PptOptions, ReportKind,
-    ReportRequest,
+    AuthorMatchMode, DoctorCheck, DoctorCheckStatus, DoctorReport, GeneratedReport, PolishOptions,
+    PolishState, PptOptions, ReportKind, ReportRequest,
 };
+pub use doctor::run_doctor;
 pub use reporting::generate_report;
 pub use update::{run_update, UpdateOptions, UpdateResult, UpdateState};

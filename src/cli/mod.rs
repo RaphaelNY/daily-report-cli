@@ -30,7 +30,8 @@ pub(crate) struct Cli {
 }
 
 pub(crate) enum AppCommand {
-    Generate(ReportRequest),
+    Generate { request: ReportRequest, json: bool },
+    Doctor { request: ReportRequest, json: bool },
     Update(UpdateOptions),
 }
 
@@ -38,6 +39,7 @@ pub(crate) enum AppCommand {
 enum Command {
     Daily(DailyArgs),
     Weekly(WeeklyArgs),
+    Doctor(DoctorArgs),
     Update(UpdateArgs),
 }
 
@@ -84,6 +86,9 @@ struct CommonArgs {
 
     #[arg(long)]
     codex_home: Option<PathBuf>,
+
+    #[arg(long)]
+    json: bool,
 }
 
 #[derive(Args, Debug)]
@@ -117,6 +122,24 @@ struct WeeklyArgs {
 }
 
 #[derive(Args, Debug)]
+struct DoctorArgs {
+    #[arg(default_value = "daily", value_parser = parse_report_kind)]
+    kind: ReportKind,
+
+    #[command(flatten)]
+    common: CommonArgs,
+
+    #[arg(long)]
+    no_ppt: bool,
+
+    #[arg(long, action = ArgAction::SetTrue, overrides_with = "no_ppt")]
+    ppt: bool,
+
+    #[arg(long)]
+    ppt_output_dir: Option<PathBuf>,
+}
+
+#[derive(Args, Debug)]
 struct UpdateArgs {
     #[arg(long)]
     check: bool,
@@ -137,6 +160,7 @@ impl Cli {
         let loaded_config = load_config(self.config.as_deref())?;
         match self.command {
             Command::Daily(args) => {
+                let json = args.common.json;
                 let date = args
                     .date
                     .or_else(|| {
@@ -153,9 +177,10 @@ impl Cli {
                     None,
                     loaded_config,
                 )
-                .map(AppCommand::Generate)
+                .map(|request| AppCommand::Generate { request, json })
             }
             Command::Weekly(args) => {
+                let json = args.common.json;
                 let end_date = args
                     .end_date
                     .or_else(|| {
@@ -188,7 +213,26 @@ impl Cli {
                     }),
                     loaded_config,
                 )
-                .map(AppCommand::Generate)
+                .map(|request| AppCommand::Generate { request, json })
+            }
+            Command::Doctor(args) => {
+                let json = args.common.json;
+                let today = Local::now().date_naive();
+                let weekly_ppt_args =
+                    matches!(args.kind, ReportKind::Weekly).then_some(WeeklyPptArgs {
+                        enabled: args.ppt,
+                        disabled: args.no_ppt,
+                        output_dir: args.ppt_output_dir,
+                    });
+                build_request(
+                    args.common,
+                    args.kind,
+                    today,
+                    today,
+                    weekly_ppt_args,
+                    loaded_config,
+                )
+                .map(|request| AppCommand::Doctor { request, json })
             }
             Command::Update(args) => Ok(AppCommand::Update(UpdateOptions {
                 check_only: args.check,
@@ -212,6 +256,16 @@ fn parse_author_match_mode(value: &str) -> Result<AuthorMatchMode, String> {
         "name_or_email" | "any" => Ok(AuthorMatchMode::NameOrEmail),
         _ => Err(format!(
             "invalid author match mode `{value}`: expected one of `name`, `email`, `name_or_email`"
+        )),
+    }
+}
+
+fn parse_report_kind(value: &str) -> Result<ReportKind, String> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "daily" => Ok(ReportKind::Daily),
+        "weekly" => Ok(ReportKind::Weekly),
+        _ => Err(format!(
+            "invalid report kind `{value}`: expected `daily` or `weekly`"
         )),
     }
 }
@@ -242,6 +296,7 @@ fn build_request(
         polish_model,
         polish_timeout_secs,
         codex_home,
+        json: _,
     } = common;
 
     let mut repo_paths = resolve_repo_paths(
