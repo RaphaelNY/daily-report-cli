@@ -23,9 +23,9 @@
 - [ ] 优先跟进：{{this}}
 {{/each}}
 {{else}}
-{{#if summary.highlights}}
-{{#each summary.highlights}}
-- [ ] 围绕“{{this}}”继续补充验证、联调或收尾工作
+{{#if summary.plan_items}}
+{{#each summary.plan_items}}
+- [ ] {{this}}
 {{/each}}
 {{else}}
 - [ ] 补充本周工作计划
@@ -47,9 +47,9 @@
 ### 2. 完成情况对比（计划 vs 实际）
 | 计划事项 | 完成情况 | 备注 |
 |----------|----------|------|
-{{#if summary.highlights}}
-{{#each summary.highlights}}
-| 跟进“{{this}}” | 已形成提交记录 | 详见下方提交概览 |
+{{#if summary.plan_items}}
+{{#each summary.plan_items}}
+| {{this}} | 已形成提交记录 | 详见下方提交概览 |
 {{/each}}
 {{else}}
 | 待补充 | 无提交记录 | 可结合项目实际补充 |
@@ -80,9 +80,9 @@
 ---
 
 ## 三、下周计划（Next Week Plan）
-{{#if summary.highlights}}
-{{#each summary.highlights}}
-- [ ] 延续“{{this}}”相关工作，视需要补充验证、文档或后续拆分任务
+{{#if summary.plan_items}}
+{{#each summary.plan_items}}
+- [ ] {{this}}
 {{/each}}
 {{else}}
 - [ ] 补充下周计划
@@ -198,9 +198,9 @@
 {{/if}}
 
 ### 五、明日计划
-{{#if summary.highlights}}
-{{#each summary.highlights}}
-- [ ] 延续“{{this}}”相关事项，并补充必要验证、说明文档或后续收尾内容
+{{#if summary.plan_items}}
+{{#each summary.plan_items}}
+- [ ] {{this}}
 {{/each}}
 {{else}}
 - [ ] 补充明日计划

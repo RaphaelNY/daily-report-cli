@@ -838,6 +838,7 @@ mod tests {
             },
             summary: SummaryInfo {
                 highlights: vec!["feat: add cli".to_string()],
+                plan_items: vec!["跟进“feat: add cli”的验证与收尾工作".to_string()],
                 modules: vec!["src".to_string(), "docs".to_string()],
                 modules_display: "src, docs".to_string(),
                 risks: vec!["todo: follow up release".to_string()],

@@ -129,13 +129,71 @@ fn build_summary(commits: &[CommitInfo], modules: &[String]) -> SummaryInfo {
             }
             acc
         });
+    let plan_items = build_plan_items(&highlights, modules, &risks);
 
     SummaryInfo {
         highlights,
+        plan_items,
         modules: modules.to_vec(),
         modules_display: join_or_dash(modules),
         risks,
     }
+}
+
+fn build_plan_items(highlights: &[String], modules: &[String], risks: &[String]) -> Vec<String> {
+    if !risks.is_empty() {
+        return risks
+            .iter()
+            .take(5)
+            .map(|risk| format!("优先跟进：{risk}"))
+            .collect();
+    }
+
+    let mut plans = Vec::new();
+    let mut seen = HashSet::new();
+
+    for highlight in highlights {
+        if is_routine_release_item(highlight) {
+            continue;
+        }
+
+        let item = format!("跟进“{highlight}”的验证、联调与收尾工作");
+        if seen.insert(item.clone()) {
+            plans.push(item);
+        }
+
+        if plans.len() >= 5 {
+            return plans;
+        }
+    }
+
+    for highlight in highlights {
+        let item = format!("跟进“{highlight}”的后续验证与说明补充");
+        if seen.insert(item.clone()) {
+            plans.push(item);
+        }
+
+        if plans.len() >= 5 {
+            return plans;
+        }
+    }
+
+    for module in modules.iter().take(5) {
+        let item = format!("围绕 `{module}` 模块继续补充验证与完善工作");
+        if seen.insert(item.clone()) {
+            plans.push(item);
+        }
+    }
+
+    plans
+}
+
+fn is_routine_release_item(highlight: &str) -> bool {
+    let lowered = highlight.to_ascii_lowercase();
+    (lowered.contains("版本") || lowered.contains("release") || lowered.contains("锁文件"))
+        && !lowered.contains("多仓库")
+        && !lowered.contains("报告")
+        && !lowered.contains("模板")
 }
 
 fn extract_risk(text: &str) -> Option<String> {
@@ -498,6 +556,7 @@ mod tests {
             },
             summary: SummaryInfo {
                 highlights: Vec::new(),
+                plan_items: Vec::new(),
                 modules: vec!["src".to_string()],
                 modules_display: "src, `README.md`".to_string(),
                 risks: Vec::new(),
@@ -554,5 +613,51 @@ mod tests {
             summary.highlights,
             vec!["repo-a、repo-b：完善命令行入口".to_string()]
         );
+        assert!(!summary.plan_items.is_empty());
+        assert!(summary.plan_items[0].contains("完善命令行入口"));
+    }
+
+    #[test]
+    fn plan_items_skip_routine_release_bumps_when_other_work_exists() {
+        let summary = build_summary(
+            &[
+                CommitInfo {
+                    repo_name: "demo".to_string(),
+                    repo_path: "/tmp/demo".to_string(),
+                    hash: "1".to_string(),
+                    short_hash: "1".to_string(),
+                    author: "Raphael".to_string(),
+                    email: "raphael@example.com".to_string(),
+                    date: "2025-02-14".to_string(),
+                    subject: "feat: update version to 0.1.3".to_string(),
+                    summary: "将版本升级至0.1.3并同步更新说明文档与安装脚本".to_string(),
+                    body: String::new(),
+                    files: vec!["Cargo.toml".to_string()],
+                    files_display: "Cargo.toml".to_string(),
+                    modules: vec!["Cargo.toml".to_string()],
+                    modules_display: "Cargo.toml".to_string(),
+                },
+                CommitInfo {
+                    repo_name: "demo".to_string(),
+                    repo_path: "/tmp/demo".to_string(),
+                    hash: "2".to_string(),
+                    short_hash: "2".to_string(),
+                    author: "Raphael".to_string(),
+                    email: "raphael@example.com".to_string(),
+                    date: "2025-02-14".to_string(),
+                    subject: "feat: add weekly ppt".to_string(),
+                    summary: "新增周报网页幻灯片生成功能并补充模板与配置支持".to_string(),
+                    body: String::new(),
+                    files: vec!["src/reporting/ppt.rs".to_string()],
+                    files_display: "src/reporting/ppt.rs".to_string(),
+                    modules: vec!["src".to_string()],
+                    modules_display: "src".to_string(),
+                },
+            ],
+            &["src".to_string()],
+        );
+
+        assert!(summary.plan_items.iter().any(|item| item.contains("周报网页幻灯片")));
+        assert!(summary.plan_items.len() <= 5);
     }
 }

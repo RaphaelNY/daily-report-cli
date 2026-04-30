@@ -157,6 +157,7 @@ pub(crate) struct ReportInfo {
 #[derive(Debug, Serialize)]
 pub(crate) struct SummaryInfo {
     pub(crate) highlights: Vec<String>,
+    pub(crate) plan_items: Vec<String>,
     pub(crate) modules: Vec<String>,
     pub(crate) modules_display: String,
     pub(crate) risks: Vec<String>,
