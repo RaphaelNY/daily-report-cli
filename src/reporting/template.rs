@@ -185,7 +185,6 @@ fn extract_risk(text: &str) -> Option<String> {
     let strong_keywords = [
         "fixme",
         "wip",
-        "risk",
         "blocker",
         "rollback",
         "revert",
@@ -206,6 +205,13 @@ fn extract_risk(text: &str) -> Option<String> {
     let has_strong_keyword = strong_keywords
         .iter()
         .any(|keyword| lowered.contains(keyword));
+    let has_risk_phrase = lowered.starts_with("risk:")
+        || lowered.starts_with("risk ")
+        || lowered.contains(" known risk")
+        || lowered.contains(" at risk")
+        || lowered.contains(" high risk")
+        || lowered.contains(" low risk")
+        || lowered.contains(" medium risk");
     let has_contextual_keyword = contextual_keywords
         .iter()
         .any(|keyword| lowered.contains(keyword));
@@ -215,7 +221,10 @@ fn extract_risk(text: &str) -> Option<String> {
         || text.contains(":")
         || text.contains("：");
 
-    if has_strong_keyword || (has_contextual_keyword && looks_like_issue_statement) {
+    if has_strong_keyword
+        || has_risk_phrase
+        || (has_contextual_keyword && looks_like_issue_statement)
+    {
         Some(normalize_whitespace(text))
     } else {
         None
@@ -527,6 +536,7 @@ mod tests {
             body: String::new(),
             files: vec!["src/main.rs".to_string()],
             files_display: "src/main.rs".to_string(),
+            files_compact_display: "src/main.rs".to_string(),
             modules: vec!["src".to_string()],
             modules_display: "src".to_string(),
         }];
@@ -603,6 +613,7 @@ mod tests {
                 body: String::new(),
                 files: vec!["src/main.rs".to_string()],
                 files_display: "src/main.rs".to_string(),
+                files_compact_display: "src/main.rs".to_string(),
                 modules: vec!["src".to_string()],
                 modules_display: "src".to_string(),
             },
@@ -619,6 +630,7 @@ mod tests {
                 body: String::new(),
                 files: vec!["src/lib.rs".to_string()],
                 files_display: "src/lib.rs".to_string(),
+                files_compact_display: "src/lib.rs".to_string(),
                 modules: vec!["src".to_string()],
                 modules_display: "src".to_string(),
             },
@@ -650,6 +662,7 @@ mod tests {
                     body: String::new(),
                     files: vec!["Cargo.toml".to_string()],
                     files_display: "Cargo.toml".to_string(),
+                    files_compact_display: "Cargo.toml".to_string(),
                     modules: vec!["Cargo.toml".to_string()],
                     modules_display: "Cargo.toml".to_string(),
                 },
@@ -666,6 +679,7 @@ mod tests {
                     body: String::new(),
                     files: vec!["src/reporting/ppt.rs".to_string()],
                     files_display: "src/reporting/ppt.rs".to_string(),
+                    files_compact_display: "src/reporting/ppt.rs".to_string(),
                     modules: vec!["src".to_string()],
                     modules_display: "src".to_string(),
                 },
@@ -694,6 +708,7 @@ mod tests {
                     body: String::new(),
                     files: vec!["Cargo.toml".to_string()],
                     files_display: "Cargo.toml".to_string(),
+                    files_compact_display: "Cargo.toml".to_string(),
                     modules: vec!["Cargo.toml".to_string()],
                     modules_display: "Cargo.toml".to_string(),
                 },
@@ -710,6 +725,7 @@ mod tests {
                     body: String::new(),
                     files: vec!["Cargo.lock".to_string()],
                     files_display: "Cargo.lock".to_string(),
+                    files_compact_display: "Cargo.lock".to_string(),
                     modules: vec!["Cargo.lock".to_string()],
                     modules_display: "Cargo.lock".to_string(),
                 },
@@ -727,5 +743,14 @@ mod tests {
     fn follow_up_commit_subject_is_not_treated_as_risk() {
         assert_eq!(extract_risk("focus report follow-up plan items"), None);
         assert_eq!(extract_risk("todo: follow up release"), Some("todo: follow up release".to_string()));
+    }
+
+    #[test]
+    fn plain_improvement_subject_with_risks_word_is_not_treated_as_risk() {
+        assert_eq!(extract_risk("avoid false positive report risks"), None);
+        assert_eq!(
+            extract_risk("risk: release process still needs manual verification"),
+            Some("risk: release process still needs manual verification".to_string())
+        );
     }
 }

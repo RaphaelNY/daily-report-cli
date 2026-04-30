@@ -177,6 +177,7 @@ pub(crate) struct CommitInfo {
     pub(crate) body: String,
     pub(crate) files: Vec<String>,
     pub(crate) files_display: String,
+    pub(crate) files_compact_display: String,
     pub(crate) modules: Vec<String>,
     pub(crate) modules_display: String,
 }

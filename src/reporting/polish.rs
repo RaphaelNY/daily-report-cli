@@ -414,6 +414,7 @@ mod tests {
             body: "support weekly reports".to_string(),
             files: vec!["src/main.rs".to_string()],
             files_display: "src/main.rs".to_string(),
+            files_compact_display: "src/main.rs".to_string(),
             modules: vec!["src".to_string()],
             modules_display: "src".to_string(),
         }]);
@@ -438,6 +439,7 @@ mod tests {
             body: String::new(),
             files: vec!["src/main.rs".to_string()],
             files_display: "src/main.rs".to_string(),
+            files_compact_display: "src/main.rs".to_string(),
             modules: vec!["src".to_string()],
             modules_display: "src".to_string(),
         }];
@@ -461,6 +463,7 @@ mod tests {
             body: String::new(),
             files: vec!["src/reporting/ppt.rs".to_string()],
             files_display: "src/reporting/ppt.rs".to_string(),
+            files_compact_display: "src/reporting/ppt.rs".to_string(),
             modules: vec!["src".to_string()],
             modules_display: "src".to_string(),
         };

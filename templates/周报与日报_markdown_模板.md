@@ -129,7 +129,7 @@
 - 来源仓库：`{{repo_name}}`
 - 作者：{{author}} <{{email}}>
 - 影响模块：{{modules_display}}
-- 变更文件：{{files_display}}
+- 变更文件：{{files_compact_display}}
 {{#if body}}
 - 备注：{{body}}
 {{/if}}
@@ -220,7 +220,7 @@
 ## 参考提交
 {{#if commits}}
 {{#each commits}}
-- `{{repo_name}}` / {{summary}}（{{files_display}}）
+- `{{repo_name}}` / {{summary}}（{{files_compact_display}}）
 {{/each}}
 {{else}}
 - 暂无提交记录

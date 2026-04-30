@@ -99,6 +99,7 @@ pub(crate) fn collect_commits(
                 summary: String::new(),
                 body: raw_commit.body.trim().to_string(),
                 files_display: join_or_dash(&files),
+                files_compact_display: compact_file_list(&files),
                 modules_display: join_or_dash(&modules),
                 files,
                 modules,
@@ -167,6 +168,20 @@ fn parse_file_list(output: &str) -> Vec<String> {
         .filter(|line| seen.insert((*line).to_string()))
         .map(ToString::to_string)
         .collect()
+}
+
+fn compact_file_list(files: &[String]) -> String {
+    if files.is_empty() {
+        return "-".to_string();
+    }
+
+    let preview_count = 4;
+    let preview = files.iter().take(preview_count).cloned().collect::<Vec<_>>();
+    if files.len() <= preview_count {
+        return preview.join(", ");
+    }
+
+    format!("{}，另外还有 {} 个文件", preview.join(", "), files.len() - preview_count)
 }
 
 fn filter_commits_by_author(
@@ -265,6 +280,7 @@ mod tests {
                 body: String::new(),
                 files: vec!["src/main.rs".to_string()],
                 files_display: "src/main.rs".to_string(),
+                files_compact_display: "src/main.rs".to_string(),
                 modules: vec!["src".to_string()],
                 modules_display: "src".to_string(),
             },
@@ -281,6 +297,7 @@ mod tests {
                 body: String::new(),
                 files: vec!["src/lib.rs".to_string()],
                 files_display: "src/lib.rs".to_string(),
+                files_compact_display: "src/lib.rs".to_string(),
                 modules: vec!["src".to_string()],
                 modules_display: "src".to_string(),
             },
@@ -302,6 +319,23 @@ mod tests {
         let no_partial =
             filter_commits_by_author(commits, Some("Rap"), AuthorMatchMode::NameOrEmail);
         assert!(no_partial.is_empty());
+    }
+
+    #[test]
+    fn compact_file_list_limits_reference_noise() {
+        let files = vec![
+            "a.rs".to_string(),
+            "b.rs".to_string(),
+            "c.rs".to_string(),
+            "d.rs".to_string(),
+            "e.rs".to_string(),
+            "f.rs".to_string(),
+        ];
+
+        assert_eq!(
+            compact_file_list(&files),
+            "a.rs, b.rs, c.rs, d.rs，另外还有 2 个文件".to_string()
+        );
     }
 
     #[test]
