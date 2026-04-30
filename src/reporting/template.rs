@@ -191,7 +191,7 @@ mod tests {
     use chrono::NaiveDate;
 
     use super::*;
-    use crate::core::types::{PolishOptions, ReportRequest};
+    use crate::core::types::{PolishOptions, PptOptions, ReportRequest};
 
     #[test]
     fn resolves_default_output_name() {
@@ -208,6 +208,7 @@ mod tests {
             max_docs: 6,
             max_doc_chars: 280,
             polish: PolishOptions::default(),
+            ppt: PptOptions::default(),
         };
         let output = resolve_output_path(&request, "My Repo").unwrap();
         assert_eq!(output, PathBuf::from("reports/daily-my-repo-2025-02-14.md"));

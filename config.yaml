@@ -30,3 +30,6 @@ daily: {}
 
 weekly:
   days: 7
+  ppt:
+    enabled: false
+    # output_dir: ./reports/weekly-ppt

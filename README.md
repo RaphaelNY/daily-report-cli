@@ -11,6 +11,7 @@
 - 支持通过 `--doc` 显式指定文档路径
 - 支持内置模板，也支持通过 `--template` 指定自定义 Markdown 模板
 - 默认尝试调用本机 `codex` CLI 对生成结果做自然语言润色
+- 支持在生成周报 Markdown 的同时，额外产出一份基于 `html-ppt` skill 资产的 HTML PPT deck
 - 在当前目录或指定目录输出 `.md` 报告文件
 
 ## 安装与运行
@@ -181,6 +182,17 @@ daily_git weekly \
   --output-dir ./reports
 ```
 
+生成周报并同时输出 HTML PPT deck：
+
+```bash
+daily_git weekly \
+  --repo /path/to/project \
+  --end-date 2025-02-14 \
+  --days 7 \
+  --output-dir ./reports \
+  --ppt
+```
+
 使用自定义模板和显式文档：
 
 ```bash
@@ -241,6 +253,9 @@ daily: {}
 
 weekly:
   days: 7
+  ppt:
+    enabled: false
+    # output_dir: ./reports/weekly-ppt
 ```
 
 支持的主要字段：
@@ -260,8 +275,25 @@ weekly:
 - `daily.date`
 - `weekly.end_date`
 - `weekly.days`
+- `weekly.ppt.enabled`
+- `weekly.ppt.output_dir`
 
 其中，配置文件中的相对路径会基于该 `config.yaml` 所在目录解析。
+
+## 周报 PPT
+
+`weekly --ppt` 会在写出 Markdown 周报后，额外生成一份 HTML 幻灯片 deck：
+
+- 默认输出目录形如 `weekly-仓库名-YYYY-MM-DD-ppt/`
+- deck 入口文件为 `index.html`
+- 同目录会自动复制 `html-ppt` skill 所需的 `assets/` 和 `style.css`
+
+注意：
+
+- 这项能力依赖本机已安装 `html-ppt` skill
+- skill 查找基于 `--codex-home`、`CODEX_HOME` 或默认的 `~/.codex`
+- 产物是静态 HTML deck，不是 `.pptx`
+- 当前仅支持周报，不支持日报
 
 ## 模板说明
 

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{deck_title}}</title>
+  <link rel="stylesheet" href="./assets/fonts.css">
+  <link rel="stylesheet" href="./assets/base.css">
+  <link rel="stylesheet" href="./assets/animations/animations.css">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body class="tpl-weekly-report">
+  <div class="deck">
+    <section class="slide" data-title="Cover">
+      <div class="cover-head">
+        <div class="logo">{{repo_name}}</div>
+        <div class="week-chip">{{week_range}}</div>
+      </div>
+      <p class="kicker">WEEKLY REPORT</p>
+      <h1 class="h1 mt-s">{{cover_headline}}</h1>
+      <p class="lede mt-m">{{cover_summary}}</p>
+      <div class="deck-footer">
+        <span>{{generated_at}} · branch: {{repo_branch}}</span>
+        <span class="slide-number" data-current="1" data-total="{{slide_total}}"></span>
+      </div>
+      <div class="notes">{{cover_notes}}</div>
+    </section>
+
+    <section class="slide" data-title="KPIs">
+      <p class="kicker">HIGHLIGHTS · KPIs</p>
+      <h2 class="h2">本周核心指标</h2>
+      <div class="grid g4 mt-l">
+        {{#each metrics}}
+        <div class="kpi {{tone_class}}">
+          <div class="label">{{label}}</div>
+          <div class="value">{{value}}</div>
+          <div class="delta {{delta_class}}">{{delta}}</div>
+        </div>
+        {{/each}}
+      </div>
+      <div class="deck-footer">
+        <span>{{metrics_footer}}</span>
+        <span class="slide-number" data-current="2" data-total="{{slide_total}}"></span>
+      </div>
+      <div class="notes">{{metrics_notes}}</div>
+    </section>
+
+    <section class="slide" data-title="Highlights">
+      <p class="kicker">SHIPPED THIS WEEK · {{highlight_count_label}}</p>
+      <h2 class="h2">提交亮点</h2>
+      <div class="mt-l" style="max-width:980px">
+        {{#each highlights}}
+        <div class="ship-item">
+          <span class="tag {{tag_class}}">{{tag_label}}</span>
+          <div>
+            <b>{{title}}</b>
+            <p class="dim ship-detail">{{detail}}</p>
+          </div>
+          <span class="owner">{{owner}}</span>
+        </div>
+        {{/each}}
+      </div>
+      <div class="deck-footer">
+        <span>{{highlights_footer}}</span>
+        <span class="slide-number" data-current="3" data-total="{{slide_total}}"></span>
+      </div>
+      <div class="notes">{{highlights_notes}}</div>
+    </section>
+
+    <section class="slide" data-title="Activity">
+      <p class="kicker">ACTIVITY TREND</p>
+      <h2 class="h2">每日提交分布</h2>
+      <div class="chart mt-l">
+        <div class="row" style="justify-content:space-between">
+          <h4>Commits per day</h4>
+          <span class="pill chart-pill">{{activity_badge}}</span>
+        </div>
+        <div class="chart-bars">
+          {{#each activity_days}}
+          <div class="col">
+            <div class="b" data-v="{{count_label}}" style="height:{{height_percent}}"></div>
+            <div class="lbl">{{label}}</div>
+          </div>
+          {{/each}}
+        </div>
+        <p class="dim chart-caption">{{activity_caption}}</p>
+      </div>
+      <div class="deck-footer">
+        <span>{{activity_footer}}</span>
+        <span class="slide-number" data-current="4" data-total="{{slide_total}}"></span>
+      </div>
+      <div class="notes">{{activity_notes}}</div>
+    </section>
+
+    <section class="slide" data-title="Modules">
+      <p class="kicker">MODULES TOUCHED</p>
+      <h2 class="h2">模块分布</h2>
+      <div class="module-list mt-l">
+        {{#each modules}}
+        <div class="module-row">
+          <div class="module-meta">
+            <div class="module-name">{{name}}</div>
+            <div class="module-summary">{{summary}}</div>
+          </div>
+          <div class="module-bar">
+            <span style="width:{{bar_width}}"></span>
+          </div>
+          <div class="module-count">{{count_label}}</div>
+        </div>
+        {{/each}}
+      </div>
+      <div class="deck-footer">
+        <span>{{modules_footer}}</span>
+        <span class="slide-number" data-current="5" data-total="{{slide_total}}"></span>
+      </div>
+      <div class="notes">{{modules_notes}}</div>
+    </section>
+
+    <section class="slide" data-title="Docs">
+      <p class="kicker">DOCS SNAPSHOT</p>
+      <h2 class="h2">参考文档</h2>
+      <div class="doc-grid mt-l">
+        {{#each docs}}
+        <article class="doc-card">
+          <div class="doc-path">{{path}}</div>
+          <h3>{{title}}</h3>
+          <p>{{excerpt}}</p>
+        </article>
+        {{/each}}
+      </div>
+      <div class="deck-footer">
+        <span>{{docs_footer}}</span>
+        <span class="slide-number" data-current="6" data-total="{{slide_total}}"></span>
+      </div>
+      <div class="notes">{{docs_notes}}</div>
+    </section>
+
+    <section class="slide" data-title="Risks">
+      <p class="kicker">RISKS & FOLLOW-UPS</p>
+      <h2 class="h2">风险与待跟进</h2>
+      <div class="mt-l" style="max-width:920px">
+        {{#each risks}}
+        <div class="blocker {{tone_class}}">
+          <h4>{{title}}</h4>
+          <p>{{detail}}</p>
+          <div class="meta">{{meta}}</div>
+        </div>
+        {{/each}}
+      </div>
+      <div class="deck-footer">
+        <span>{{risks_footer}}</span>
+        <span class="slide-number" data-current="7" data-total="{{slide_total}}"></span>
+      </div>
+      <div class="notes">{{risks_notes}}</div>
+    </section>
+  </div>
+  <script src="./assets/runtime.js"></script>
+</body>
+</html>

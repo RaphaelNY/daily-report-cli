@@ -49,6 +49,14 @@ pub struct DailyFileConfig {
 pub struct WeeklyFileConfig {
     pub end_date: Option<NaiveDate>,
     pub days: Option<i64>,
+    #[serde(default)]
+    pub ppt: WeeklyPptFileConfig,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct WeeklyPptFileConfig {
+    pub enabled: Option<bool>,
+    pub output_dir: Option<PathBuf>,
 }
 
 /// 已加载配置及其路径基准。
@@ -155,6 +163,9 @@ polish:
   timeout_secs: 120
 weekly:
   days: 5
+  ppt:
+    enabled: true
+    output_dir: ./reports/weekly-ppt
 "#,
         )
         .unwrap();
@@ -163,5 +174,10 @@ weekly:
         assert_eq!(config.max_docs, Some(8));
         assert_eq!(config.polish.timeout_secs, Some(120));
         assert_eq!(config.weekly.days, Some(5));
+        assert_eq!(config.weekly.ppt.enabled, Some(true));
+        assert_eq!(
+            config.weekly.ppt.output_dir,
+            Some(PathBuf::from("./reports/weekly-ppt"))
+        );
     }
 }

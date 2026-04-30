@@ -13,6 +13,8 @@ mod reporting;
 mod update;
 
 pub use config::{load_config, LoadedConfig, ReportFileConfig};
-pub use core::types::{GeneratedReport, PolishOptions, PolishState, ReportKind, ReportRequest};
+pub use core::types::{
+    GeneratedReport, PolishOptions, PolishState, PptOptions, ReportKind, ReportRequest,
+};
 pub use reporting::generate_report;
 pub use update::{run_update, UpdateOptions, UpdateResult, UpdateState};

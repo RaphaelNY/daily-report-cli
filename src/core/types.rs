@@ -49,6 +49,13 @@ impl Default for PolishOptions {
     }
 }
 
+/// 周报 HTML PPT deck 输出配置。
+#[derive(Debug, Clone, Default)]
+pub struct PptOptions {
+    pub enabled: bool,
+    pub output_dir: Option<PathBuf>,
+}
+
 /// 生成报告所需的完整请求。
 #[derive(Debug, Clone)]
 pub struct ReportRequest {
@@ -64,6 +71,7 @@ pub struct ReportRequest {
     pub max_docs: usize,
     pub max_doc_chars: usize,
     pub polish: PolishOptions,
+    pub ppt: PptOptions,
 }
 
 /// 报告生成结果。
@@ -71,6 +79,7 @@ pub struct ReportRequest {
 pub struct GeneratedReport {
     pub output_path: PathBuf,
     pub polish_state: PolishState,
+    pub ppt_path: Option<PathBuf>,
 }
 
 /// Codex 润色状态。

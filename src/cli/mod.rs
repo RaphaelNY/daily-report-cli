@@ -10,8 +10,8 @@ use clap::ArgAction;
 use clap::{Args, Parser, Subcommand};
 
 use daily_git::{
-    load_config, LoadedConfig, PolishOptions, ReportFileConfig, ReportKind, ReportRequest,
-    UpdateOptions,
+    load_config, LoadedConfig, PolishOptions, PptOptions, ReportFileConfig, ReportKind,
+    ReportRequest, UpdateOptions,
 };
 
 /// 顶层命令定义。
@@ -102,6 +102,15 @@ struct WeeklyArgs {
 
     #[arg(long)]
     days: Option<i64>,
+
+    #[arg(long)]
+    no_ppt: bool,
+
+    #[arg(long, action = ArgAction::SetTrue, overrides_with = "no_ppt")]
+    ppt: bool,
+
+    #[arg(long)]
+    ppt_output_dir: Option<PathBuf>,
 }
 
 #[derive(Args, Debug)]
@@ -133,8 +142,15 @@ impl Cli {
                             .and_then(|config| config.values.daily.date)
                     })
                     .unwrap_or_else(|| Local::now().date_naive());
-                build_request(args.common, ReportKind::Daily, date, date, loaded_config)
-                    .map(AppCommand::Generate)
+                build_request(
+                    args.common,
+                    ReportKind::Daily,
+                    date,
+                    date,
+                    None,
+                    loaded_config,
+                )
+                .map(AppCommand::Generate)
             }
             Command::Weekly(args) => {
                 let end_date = args
@@ -162,6 +178,11 @@ impl Cli {
                     ReportKind::Weekly,
                     start_date,
                     end_date,
+                    Some(WeeklyPptArgs {
+                        enabled: args.ppt,
+                        disabled: args.no_ppt,
+                        output_dir: args.ppt_output_dir,
+                    }),
                     loaded_config,
                 )
                 .map(AppCommand::Generate)
@@ -186,6 +207,7 @@ fn build_request(
     kind: ReportKind,
     start_date: NaiveDate,
     end_date: NaiveDate,
+    weekly_ppt_args: Option<WeeklyPptArgs>,
     loaded_config: Option<LoadedConfig>,
 ) -> Result<ReportRequest> {
     let config_values = loaded_config.as_ref().map(|config| &config.values);
@@ -253,6 +275,7 @@ fn build_request(
         config_values.and_then(|config| config.polish.codex_home.clone()),
         loaded_config.as_ref(),
     );
+    let ppt = resolve_ppt_options(kind, weekly_ppt_args, config_values, loaded_config.as_ref());
 
     Ok(ReportRequest {
         kind,
@@ -272,7 +295,15 @@ fn build_request(
             timeout_secs: polish_timeout_secs,
             codex_home,
         },
+        ppt,
     })
+}
+
+#[derive(Debug)]
+struct WeeklyPptArgs {
+    enabled: bool,
+    disabled: bool,
+    output_dir: Option<PathBuf>,
 }
 
 fn validate_output_conflict(common: &CommonArgs, config: Option<&ReportFileConfig>) -> Result<()> {
@@ -375,4 +406,43 @@ fn resolve_polish_enabled(
     config
         .and_then(|config| config.polish.enabled)
         .unwrap_or(true)
+}
+
+fn resolve_ppt_options(
+    kind: ReportKind,
+    weekly_ppt_args: Option<WeeklyPptArgs>,
+    config: Option<&ReportFileConfig>,
+    loaded_config: Option<&LoadedConfig>,
+) -> PptOptions {
+    if !matches!(kind, ReportKind::Weekly) {
+        return PptOptions::default();
+    }
+
+    let config_ppt = config.map(|config| &config.weekly.ppt);
+    let Some(weekly_ppt_args) = weekly_ppt_args else {
+        return PptOptions {
+            enabled: config_ppt.and_then(|ppt| ppt.enabled).unwrap_or(false),
+            output_dir: config_ppt
+                .and_then(|ppt| resolve_optional_path(None, ppt.output_dir.clone(), loaded_config)),
+        };
+    };
+
+    let enabled = if weekly_ppt_args.enabled {
+        true
+    } else if weekly_ppt_args.disabled {
+        false
+    } else {
+        config_ppt.and_then(|ppt| ppt.enabled).unwrap_or(false)
+    };
+
+    let output_dir = resolve_optional_path(
+        weekly_ppt_args.output_dir,
+        config_ppt.and_then(|ppt| ppt.output_dir.clone()),
+        loaded_config,
+    );
+
+    PptOptions {
+        enabled,
+        output_dir,
+    }
 }

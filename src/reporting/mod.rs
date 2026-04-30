@@ -1,6 +1,7 @@
 //! 报告生成主流程编排。
 
 mod polish;
+mod ppt;
 mod template;
 
 use std::fs;
@@ -13,6 +14,7 @@ use crate::core::types::{GeneratedReport, ReportRequest};
 use crate::core::utils::collect_modules;
 
 use self::polish::polish_markdown;
+use self::ppt::generate_weekly_ppt;
 use self::template::{build_context, render_markdown, resolve_output_path};
 
 /// 生成单份日报或周报。
@@ -44,8 +46,15 @@ pub fn generate_report(request: &ReportRequest) -> Result<GeneratedReport> {
     fs::write(&output_path, polished.content)
         .with_context(|| format!("failed to write report {}", output_path.display()))?;
 
+    let ppt_path = if request.ppt.enabled {
+        Some(generate_weekly_ppt(request, &context)?)
+    } else {
+        None
+    };
+
     Ok(GeneratedReport {
         output_path,
         polish_state: polished.state,
+        ppt_path,
     })
 }

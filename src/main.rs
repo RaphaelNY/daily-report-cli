@@ -11,6 +11,9 @@ fn main() -> Result<()> {
         AppCommand::Generate(request) => {
             let generated = generate_report(&request)?;
             println!("{}", generated.output_path.display());
+            if let Some(ppt_path) = generated.ppt_path {
+                eprintln!("ppt: {}", ppt_path.display());
+            }
             eprintln!("polish: {}", generated.polish_state);
         }
         AppCommand::Update(options) => {
