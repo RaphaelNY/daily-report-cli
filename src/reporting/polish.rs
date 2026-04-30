@@ -31,6 +31,10 @@ pub(crate) fn summarize_commits(
         return Vec::new();
     }
 
+    if !options.enabled {
+        return commits.iter().map(fallback_summary).collect();
+    }
+
     match check_codex_ready(options) {
         CodexReady::Ready => {}
         CodexReady::Skipped(_) => return commits.iter().map(fallback_summary).collect(),
@@ -446,6 +450,44 @@ mod tests {
 
         let summaries = parse_commit_summaries("[\"完善命令行入口支持\"]", &commits);
         assert_eq!(summaries, vec!["完善命令行入口支持".to_string()]);
+    }
+
+    #[test]
+    fn disabled_polish_uses_deterministic_fallback_summaries() {
+        let commits = vec![CommitInfo {
+            repo_name: "demo".to_string(),
+            repo_path: "/tmp/demo".to_string(),
+            hash: "abc".to_string(),
+            short_hash: "abc".to_string(),
+            author: "Alice".to_string(),
+            email: "alice@example.com".to_string(),
+            date: "2025-02-14".to_string(),
+            subject: "feat: add cli".to_string(),
+            summary: String::new(),
+            body: String::new(),
+            files: vec!["src/main.rs".to_string()],
+            files_display: "src/main.rs".to_string(),
+            files_compact_display: "src/main.rs".to_string(),
+            modules: vec!["src".to_string()],
+            modules_display: "src".to_string(),
+        }];
+
+        let summaries = summarize_commits(
+            &PolishOptions {
+                enabled: false,
+                model: None,
+                timeout_secs: 90,
+                codex_home: None,
+            },
+            &RepoInfo {
+                name: "demo".to_string(),
+                path: "/tmp/demo".to_string(),
+                branch: "main".to_string(),
+            },
+            &commits,
+        );
+
+        assert_eq!(summaries, vec!["新增cli（src）".to_string()]);
     }
 
     #[test]
