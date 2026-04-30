@@ -16,8 +16,8 @@
 {{/if}}
 
 ## 工作汇总
-{{#if summary.highlights}}
-{{#each summary.highlights}}
+{{#if summary.work_items}}
+{{#each summary.work_items}}
 - {{this}}
 {{/each}}
 {{else}}
@@ -32,7 +32,7 @@
 - 作者：{{author}} <{{email}}>
 - 日期：{{date}}
 - 影响模块：{{modules_display}}
-- 变更文件：{{files_display}}
+- 变更文件：{{files_compact_display}}
 {{#if body}}
 
 {{body}}

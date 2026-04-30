@@ -157,6 +157,8 @@ pub(crate) struct ReportInfo {
 #[derive(Debug, Serialize)]
 pub(crate) struct SummaryInfo {
     pub(crate) highlights: Vec<String>,
+    pub(crate) work_items: Vec<String>,
+    pub(crate) plan_items: Vec<String>,
     pub(crate) modules: Vec<String>,
     pub(crate) modules_display: String,
     pub(crate) risks: Vec<String>,
@@ -176,6 +178,7 @@ pub(crate) struct CommitInfo {
     pub(crate) body: String,
     pub(crate) files: Vec<String>,
     pub(crate) files_display: String,
+    pub(crate) files_compact_display: String,
     pub(crate) modules: Vec<String>,
     pub(crate) modules_display: String,
 }

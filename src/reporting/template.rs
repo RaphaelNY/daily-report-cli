@@ -95,29 +95,14 @@ fn default_template(kind: ReportKind) -> &'static str {
 }
 
 fn build_summary(commits: &[CommitInfo], modules: &[String]) -> SummaryInfo {
-    let mut highlights = Vec::new();
-    let mut seen = HashSet::new();
     let multi_repo = commits
         .iter()
         .map(|commit| commit.repo_name.as_str())
         .collect::<HashSet<_>>()
         .len()
         > 1;
-    if multi_repo {
-        for (summary, repos) in aggregate_commit_summaries(commits) {
-            let display = format!("{}：{}", repos.join("、"), summary);
-            if seen.insert(display.clone()) {
-                highlights.push(display);
-            }
-        }
-    } else {
-        for commit in commits {
-            let normalized = normalize_whitespace(&commit.summary);
-            if !normalized.is_empty() && seen.insert(normalized.clone()) {
-                highlights.push(normalized);
-            }
-        }
-    }
+    let highlights = summarize_commit_groups(commits, multi_repo);
+    let work_items = build_work_items(commits, modules, multi_repo);
 
     let risks = commits
         .iter()
@@ -129,27 +114,185 @@ fn build_summary(commits: &[CommitInfo], modules: &[String]) -> SummaryInfo {
             }
             acc
         });
+    let plan_items = build_plan_items(&highlights, modules, &risks);
 
     SummaryInfo {
         highlights,
+        work_items,
+        plan_items,
         modules: modules.to_vec(),
         modules_display: join_or_dash(modules),
         risks,
     }
 }
 
+fn build_work_items(commits: &[CommitInfo], modules: &[String], multi_repo: bool) -> Vec<String> {
+    if commits.is_empty() {
+        return Vec::new();
+    }
+
+    struct WorkItemCandidate {
+        module: String,
+        item: String,
+        commit_count: usize,
+        has_non_routine: bool,
+    }
+
+    let mut candidates = Vec::new();
+    for module in modules {
+        let related = commits
+            .iter()
+            .filter(|commit| commit.modules.iter().any(|item| item == module))
+            .collect::<Vec<_>>();
+        if related.is_empty() {
+            continue;
+        }
+
+        let mut routine_summaries = Vec::new();
+        let mut non_routine_summaries = Vec::new();
+        let mut summary_seen = HashSet::new();
+        for commit in &related {
+            let summary = summarized_highlight_text(&commit.summary);
+            if !summary.is_empty() && summary_seen.insert(summary.clone()) {
+                if is_routine_release_item(&summary) {
+                    routine_summaries.push(summary);
+                } else {
+                    non_routine_summaries.push(summary);
+                }
+            }
+        }
+
+        let has_non_routine = !non_routine_summaries.is_empty();
+        let summaries = if has_non_routine {
+            &non_routine_summaries
+        } else {
+            &routine_summaries
+        };
+        let details = if summaries.is_empty() {
+            "整理相关文件与提交记录".to_string()
+        } else {
+            summaries
+                .iter()
+                .take(3)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join("；")
+        };
+        let scope = if multi_repo {
+            let mut repos = Vec::new();
+            for commit in &related {
+                if !repos.contains(&commit.repo_name) {
+                    repos.push(commit.repo_name.clone());
+                }
+            }
+            format!("{}：", repos.join("、"))
+        } else {
+            String::new()
+        };
+        let item = format!(
+            "{scope}围绕 `{module}` 完成 {} 次提交，主要涉及：{details}",
+            related.len()
+        );
+        candidates.push(WorkItemCandidate {
+            module: module.clone(),
+            item,
+            commit_count: related.len(),
+            has_non_routine,
+        });
+    }
+
+    candidates.sort_by(|left, right| {
+        right
+            .has_non_routine
+            .cmp(&left.has_non_routine)
+            .then_with(|| right.commit_count.cmp(&left.commit_count))
+            .then_with(|| left.module.cmp(&right.module))
+    });
+
+    let mut items = Vec::new();
+    let mut seen = HashSet::new();
+    for candidate in candidates {
+        if seen.insert(candidate.item.clone()) {
+            items.push(candidate.item);
+        }
+        if items.len() >= 5 {
+            break;
+        }
+    }
+
+    if items.is_empty() {
+        return summarize_commit_groups(commits, multi_repo)
+            .into_iter()
+            .take(5)
+            .map(|item| format!("推进相关提交：{item}"))
+            .collect();
+    }
+
+    items
+}
+
+fn build_plan_items(highlights: &[String], modules: &[String], risks: &[String]) -> Vec<String> {
+    if !risks.is_empty() {
+        return risks
+            .iter()
+            .take(5)
+            .map(|risk| format!("优先跟进：{risk}"))
+            .collect();
+    }
+
+    let mut plans = Vec::new();
+    let mut seen = HashSet::new();
+
+    for highlight in highlights {
+        if is_routine_release_item(highlight) {
+            continue;
+        }
+
+        let item = format!("跟进“{highlight}”的验证、联调与收尾工作");
+        if seen.insert(item.clone()) {
+            plans.push(item);
+        }
+
+        if plans.len() >= 5 {
+            return plans;
+        }
+    }
+
+    for highlight in highlights {
+        let item = format!("跟进“{highlight}”的后续验证与说明补充");
+        if seen.insert(item.clone()) {
+            plans.push(item);
+        }
+
+        if plans.len() >= 5 {
+            return plans;
+        }
+    }
+
+    for module in modules.iter().take(5) {
+        let item = format!("围绕 `{module}` 模块继续补充验证与完善工作");
+        if seen.insert(item.clone()) {
+            plans.push(item);
+        }
+    }
+
+    plans
+}
+
+fn is_routine_release_item(highlight: &str) -> bool {
+    let lowered = highlight.to_ascii_lowercase();
+    (lowered.contains("版本") || lowered.contains("release") || lowered.contains("锁文件"))
+        && !lowered.contains("多仓库")
+        && !lowered.contains("报告")
+        && !lowered.contains("模板")
+}
+
 fn extract_risk(text: &str) -> Option<String> {
     let lowered = text.to_ascii_lowercase();
-    let keywords = [
-        "todo",
+    let strong_keywords = [
         "fixme",
         "wip",
-        "risk",
         "blocker",
-        "follow-up",
-        "followup",
-        "pending",
-        "temporary",
         "rollback",
         "revert",
         "failed",
@@ -164,9 +307,38 @@ fn extract_risk(text: &str) -> Option<String> {
         "权限",
         "阻塞",
         "风险",
+    ];
+    let contextual_keywords = [
+        "todo",
+        "pending",
+        "temporary",
+        "follow-up",
+        "followup",
         "跟进",
     ];
-    if keywords.iter().any(|keyword| lowered.contains(keyword)) {
+    let has_strong_keyword = strong_keywords
+        .iter()
+        .any(|keyword| lowered.contains(keyword));
+    let has_risk_phrase = lowered.starts_with("risk:")
+        || lowered.starts_with("risk ")
+        || lowered.contains(" known risk")
+        || lowered.contains(" at risk")
+        || lowered.contains(" high risk")
+        || lowered.contains(" low risk")
+        || lowered.contains(" medium risk");
+    let has_contextual_keyword = contextual_keywords
+        .iter()
+        .any(|keyword| lowered.contains(keyword));
+    let looks_like_issue_statement = text.contains("问题")
+        || text.contains("困难")
+        || text.contains("待确认")
+        || text.contains(":")
+        || text.contains("：");
+
+    if has_strong_keyword
+        || has_risk_phrase
+        || (has_contextual_keyword && looks_like_issue_statement)
+    {
         Some(normalize_whitespace(text))
     } else {
         None
@@ -178,7 +350,7 @@ fn aggregate_commit_summaries(commits: &[CommitInfo]) -> Vec<(String, Vec<String
     let mut indexes: BTreeMap<String, usize> = BTreeMap::new();
 
     for commit in commits {
-        let summary = normalize_whitespace(&commit.summary);
+        let summary = summarized_highlight_text(&commit.summary);
         if summary.is_empty() {
             continue;
         }
@@ -196,6 +368,42 @@ fn aggregate_commit_summaries(commits: &[CommitInfo]) -> Vec<(String, Vec<String
     }
 
     grouped
+}
+
+fn summarize_commit_groups(commits: &[CommitInfo], multi_repo: bool) -> Vec<String> {
+    let mut items = Vec::new();
+    let mut seen = HashSet::new();
+
+    if multi_repo {
+        for (summary, repos) in aggregate_commit_summaries(commits) {
+            let display = format!("{}：{}", repos.join("、"), summary);
+            if seen.insert(display.clone()) {
+                items.push(display);
+            }
+        }
+        return items;
+    }
+
+    for commit in commits {
+        let normalized = summarized_highlight_text(&commit.summary);
+        if !normalized.is_empty() && seen.insert(normalized.clone()) {
+            items.push(normalized);
+        }
+    }
+    items
+}
+
+fn summarized_highlight_text(summary: &str) -> String {
+    let normalized = normalize_whitespace(summary);
+    if normalized.is_empty() {
+        return normalized;
+    }
+
+    if is_routine_release_item(&normalized) {
+        return "同步完成版本升级、锁文件刷新与相关说明更新".to_string();
+    }
+
+    normalized
 }
 
 fn build_report_info(
@@ -303,30 +511,19 @@ fn build_daily_logs(
 }
 
 fn summarize_daily_commit_items(commits: &[&CommitInfo], multi_repo: bool) -> Vec<String> {
-    let mut items = Vec::new();
-    let mut seen = HashSet::new();
-
     if multi_repo {
         let owned = commits
             .iter()
             .map(|commit| (*commit).clone())
             .collect::<Vec<_>>();
-        for (summary, repos) in aggregate_commit_summaries(&owned) {
-            let display = format!("{}：{}", repos.join("、"), summary);
-            if seen.insert(display.clone()) {
-                items.push(display);
-            }
-        }
-        return items;
+        return summarize_commit_groups(&owned, true);
     }
 
-    for commit in commits {
-        let normalized = normalize_whitespace(&commit.summary);
-        if !normalized.is_empty() && seen.insert(normalized.clone()) {
-            items.push(normalized);
-        }
-    }
-    items
+    let owned = commits
+        .iter()
+        .map(|commit| (*commit).clone())
+        .collect::<Vec<_>>();
+    summarize_commit_groups(&owned, false)
 }
 
 fn dedupe_entries(entries: Vec<String>) -> Vec<String> {
@@ -453,6 +650,7 @@ mod tests {
             body: String::new(),
             files: vec!["src/main.rs".to_string()],
             files_display: "src/main.rs".to_string(),
+            files_compact_display: "src/main.rs".to_string(),
             modules: vec!["src".to_string()],
             modules_display: "src".to_string(),
         }];
@@ -498,6 +696,8 @@ mod tests {
             },
             summary: SummaryInfo {
                 highlights: Vec::new(),
+                work_items: Vec::new(),
+                plan_items: Vec::new(),
                 modules: vec!["src".to_string()],
                 modules_display: "src, `README.md`".to_string(),
                 risks: Vec::new(),
@@ -528,6 +728,7 @@ mod tests {
                 body: String::new(),
                 files: vec!["src/main.rs".to_string()],
                 files_display: "src/main.rs".to_string(),
+                files_compact_display: "src/main.rs".to_string(),
                 modules: vec!["src".to_string()],
                 modules_display: "src".to_string(),
             },
@@ -544,6 +745,7 @@ mod tests {
                 body: String::new(),
                 files: vec!["src/lib.rs".to_string()],
                 files_display: "src/lib.rs".to_string(),
+                files_compact_display: "src/lib.rs".to_string(),
                 modules: vec!["src".to_string()],
                 modules_display: "src".to_string(),
             },
@@ -553,6 +755,127 @@ mod tests {
         assert_eq!(
             summary.highlights,
             vec!["repo-a、repo-b：完善命令行入口".to_string()]
+        );
+        assert_eq!(
+            summary.work_items,
+            vec!["repo-a、repo-b：围绕 `src` 完成 2 次提交，主要涉及：完善命令行入口".to_string()]
+        );
+        assert!(!summary.plan_items.is_empty());
+        assert!(summary.plan_items[0].contains("完善命令行入口"));
+    }
+
+    #[test]
+    fn plan_items_skip_routine_release_bumps_when_other_work_exists() {
+        let summary = build_summary(
+            &[
+                CommitInfo {
+                    repo_name: "demo".to_string(),
+                    repo_path: "/tmp/demo".to_string(),
+                    hash: "1".to_string(),
+                    short_hash: "1".to_string(),
+                    author: "Raphael".to_string(),
+                    email: "raphael@example.com".to_string(),
+                    date: "2025-02-14".to_string(),
+                    subject: "feat: update version to 0.1.3".to_string(),
+                    summary: "将版本升级至0.1.3并同步更新说明文档与安装脚本".to_string(),
+                    body: String::new(),
+                    files: vec!["Cargo.toml".to_string()],
+                    files_display: "Cargo.toml".to_string(),
+                    files_compact_display: "Cargo.toml".to_string(),
+                    modules: vec!["Cargo.toml".to_string()],
+                    modules_display: "Cargo.toml".to_string(),
+                },
+                CommitInfo {
+                    repo_name: "demo".to_string(),
+                    repo_path: "/tmp/demo".to_string(),
+                    hash: "2".to_string(),
+                    short_hash: "2".to_string(),
+                    author: "Raphael".to_string(),
+                    email: "raphael@example.com".to_string(),
+                    date: "2025-02-14".to_string(),
+                    subject: "feat: add weekly ppt".to_string(),
+                    summary: "新增周报网页幻灯片生成功能并补充模板与配置支持".to_string(),
+                    body: String::new(),
+                    files: vec!["src/reporting/ppt.rs".to_string()],
+                    files_display: "src/reporting/ppt.rs".to_string(),
+                    files_compact_display: "src/reporting/ppt.rs".to_string(),
+                    modules: vec!["src".to_string()],
+                    modules_display: "src".to_string(),
+                },
+            ],
+            &["src".to_string()],
+        );
+
+        assert!(summary
+            .plan_items
+            .iter()
+            .any(|item| item.contains("周报网页幻灯片")));
+        assert!(summary.plan_items.len() <= 5);
+    }
+
+    #[test]
+    fn summary_collapses_multiple_release_bumps_into_one_highlight() {
+        let summary = build_summary(
+            &[
+                CommitInfo {
+                    repo_name: "demo".to_string(),
+                    repo_path: "/tmp/demo".to_string(),
+                    hash: "1".to_string(),
+                    short_hash: "1".to_string(),
+                    author: "Raphael".to_string(),
+                    email: "raphael@example.com".to_string(),
+                    date: "2025-02-14".to_string(),
+                    subject: "feat: bump version".to_string(),
+                    summary: "将版本升级至0.1.3并同步更新说明文档与安装脚本".to_string(),
+                    body: String::new(),
+                    files: vec!["Cargo.toml".to_string()],
+                    files_display: "Cargo.toml".to_string(),
+                    files_compact_display: "Cargo.toml".to_string(),
+                    modules: vec!["Cargo.toml".to_string()],
+                    modules_display: "Cargo.toml".to_string(),
+                },
+                CommitInfo {
+                    repo_name: "demo".to_string(),
+                    repo_path: "/tmp/demo".to_string(),
+                    hash: "2".to_string(),
+                    short_hash: "2".to_string(),
+                    author: "Raphael".to_string(),
+                    email: "raphael@example.com".to_string(),
+                    date: "2025-02-14".to_string(),
+                    subject: "fix: refresh lockfile".to_string(),
+                    summary: "为0.1.2版本发布刷新并校准项目依赖锁文件内容".to_string(),
+                    body: String::new(),
+                    files: vec!["Cargo.lock".to_string()],
+                    files_display: "Cargo.lock".to_string(),
+                    files_compact_display: "Cargo.lock".to_string(),
+                    modules: vec!["Cargo.lock".to_string()],
+                    modules_display: "Cargo.lock".to_string(),
+                },
+            ],
+            &["Cargo.toml".to_string()],
+        );
+
+        assert_eq!(
+            summary.highlights,
+            vec!["同步完成版本升级、锁文件刷新与相关说明更新".to_string()]
+        );
+    }
+
+    #[test]
+    fn follow_up_commit_subject_is_not_treated_as_risk() {
+        assert_eq!(extract_risk("focus report follow-up plan items"), None);
+        assert_eq!(
+            extract_risk("todo: follow up release"),
+            Some("todo: follow up release".to_string())
+        );
+    }
+
+    #[test]
+    fn plain_improvement_subject_with_risks_word_is_not_treated_as_risk() {
+        assert_eq!(extract_risk("avoid false positive report risks"), None);
+        assert_eq!(
+            extract_risk("risk: release process still needs manual verification"),
+            Some("risk: release process still needs manual verification".to_string())
         );
     }
 }
