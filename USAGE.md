@@ -23,6 +23,19 @@ daily_git weekly \
 
 输出默认写到当前目录；如果指定 `--output-dir`，则写到目标目录。
 
+如果需要让脚本或 agent 稳定解析生成结果，可以加 `--json`：
+
+```bash
+daily_git daily \
+  --repo /path/to/project \
+  --date 2025-02-14 \
+  --output-dir ./reports \
+  --no-polish \
+  --json
+```
+
+输出为 JSON，包含报告路径、PPT 路径和润色状态。
+
 ## 多仓库聚合
 
 `--repo` 可以重复传入。工具会把多个项目目录聚合成一份报告，而不是生成多份。
@@ -131,6 +144,64 @@ daily_git weekly \
 - `weekly-my-repo-2025-02-14-ppt/index.html`
 
 这项能力依赖本机已安装 `html-ppt` skill。
+
+## Agent Skill Wrapper
+
+仓库内的 `skills/daily-git-skill/run.sh` 是面向 agent 的最小封装。
+
+默认行为：
+
+- 添加 `--json`
+- 添加 `--no-polish`
+- 周报添加 `--no-ppt`
+- 支持 `doctor` 预检
+- 只允许 `daily` / `weekly` / `doctor`
+
+安装、检查和卸载：
+
+```bash
+daily_git skill install
+daily_git skill status
+daily_git skill uninstall
+```
+
+默认目标目录是 `$CODEX_HOME/skills/daily-git-skill`，未设置 `CODEX_HOME` 时使用 `~/.codex/skills/daily-git-skill`。如需覆盖已有安装：
+
+```bash
+daily_git skill install --force
+```
+
+如需安装到自定义 Codex home：
+
+```bash
+daily_git skill install --codex-home /path/to/.codex
+```
+
+预检示例：
+
+```bash
+skills/daily-git-skill/run.sh doctor weekly \
+  --repo /path/to/project \
+  --output-dir ./reports
+```
+
+`doctor` 不写报告文件。若存在失败项，命令会返回非 0；若只有警告项，则仍视为可继续。
+
+示例：
+
+```bash
+skills/daily-git-skill/run.sh weekly \
+  --repo /path/to/project \
+  --end-date 2025-02-14 \
+  --days 7 \
+  --output-dir ./reports
+```
+
+如需使用已安装版本而不是当前仓库构建产物，可以设置：
+
+```bash
+DAILY_GIT_BIN=/usr/local/bin/daily_git skills/daily-git-skill/run.sh daily --repo /path/to/project
+```
 
 ## Codex 润色与提交摘要
 

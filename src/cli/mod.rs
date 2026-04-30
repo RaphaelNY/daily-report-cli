@@ -11,7 +11,7 @@ use clap::{Args, Parser, Subcommand};
 
 use daily_git::{
     load_config, AuthorMatchMode, LoadedConfig, PolishOptions, PptOptions, ReportFileConfig,
-    ReportKind, ReportRequest, UpdateOptions,
+    ReportKind, ReportRequest, SkillAction, SkillOptions, UpdateOptions,
 };
 
 /// 顶层命令定义。
@@ -22,15 +22,14 @@ use daily_git::{
     about = "Generate daily and weekly Git markdown reports from commits and project docs."
 )]
 pub(crate) struct Cli {
-    #[arg(long, global = true)]
-    config: Option<PathBuf>,
-
     #[command(subcommand)]
     command: Command,
 }
 
 pub(crate) enum AppCommand {
-    Generate(ReportRequest),
+    Generate { request: ReportRequest, json: bool },
+    Doctor { request: ReportRequest, json: bool },
+    Skill { options: SkillOptions, json: bool },
     Update(UpdateOptions),
 }
 
@@ -38,11 +37,16 @@ pub(crate) enum AppCommand {
 enum Command {
     Daily(DailyArgs),
     Weekly(WeeklyArgs),
+    Doctor(DoctorArgs),
+    Skill(SkillArgs),
     Update(UpdateArgs),
 }
 
 #[derive(Args, Debug)]
 struct CommonArgs {
+    #[arg(long)]
+    config: Option<PathBuf>,
+
     #[arg(long = "repo")]
     repos: Vec<PathBuf>,
 
@@ -84,6 +88,9 @@ struct CommonArgs {
 
     #[arg(long)]
     codex_home: Option<PathBuf>,
+
+    #[arg(long)]
+    json: bool,
 }
 
 #[derive(Args, Debug)]
@@ -117,6 +124,58 @@ struct WeeklyArgs {
 }
 
 #[derive(Args, Debug)]
+struct DoctorArgs {
+    #[arg(default_value = "daily", value_parser = parse_report_kind)]
+    kind: ReportKind,
+
+    #[command(flatten)]
+    common: CommonArgs,
+
+    #[arg(long)]
+    no_ppt: bool,
+
+    #[arg(long, action = ArgAction::SetTrue, overrides_with = "no_ppt")]
+    ppt: bool,
+
+    #[arg(long)]
+    ppt_output_dir: Option<PathBuf>,
+}
+
+#[derive(Args, Debug)]
+struct SkillArgs {
+    #[command(subcommand)]
+    command: SkillCommand,
+}
+
+#[derive(Subcommand, Debug)]
+enum SkillCommand {
+    Install(SkillInstallArgs),
+    Uninstall(SkillSharedArgs),
+    Status(SkillSharedArgs),
+}
+
+#[derive(Args, Debug)]
+struct SkillInstallArgs {
+    #[arg(long)]
+    codex_home: Option<PathBuf>,
+
+    #[arg(long)]
+    force: bool,
+
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(Args, Debug)]
+struct SkillSharedArgs {
+    #[arg(long)]
+    codex_home: Option<PathBuf>,
+
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(Args, Debug)]
 struct UpdateArgs {
     #[arg(long)]
     check: bool,
@@ -134,9 +193,11 @@ struct UpdateArgs {
 impl Cli {
     /// 将命令行参数转换成内部请求对象。
     pub(crate) fn into_command(self) -> Result<AppCommand> {
-        let loaded_config = load_config(self.config.as_deref())?;
         match self.command {
             Command::Daily(args) => {
+                let config = args.common.config.clone();
+                let loaded_config = load_config(config.as_deref())?;
+                let json = args.common.json;
                 let date = args
                     .date
                     .or_else(|| {
@@ -153,9 +214,12 @@ impl Cli {
                     None,
                     loaded_config,
                 )
-                .map(AppCommand::Generate)
+                .map(|request| AppCommand::Generate { request, json })
             }
             Command::Weekly(args) => {
+                let config = args.common.config.clone();
+                let loaded_config = load_config(config.as_deref())?;
+                let json = args.common.json;
                 let end_date = args
                     .end_date
                     .or_else(|| {
@@ -188,8 +252,30 @@ impl Cli {
                     }),
                     loaded_config,
                 )
-                .map(AppCommand::Generate)
+                .map(|request| AppCommand::Generate { request, json })
             }
+            Command::Doctor(args) => {
+                let config = args.common.config.clone();
+                let loaded_config = load_config(config.as_deref())?;
+                let json = args.common.json;
+                let today = Local::now().date_naive();
+                let weekly_ppt_args =
+                    matches!(args.kind, ReportKind::Weekly).then_some(WeeklyPptArgs {
+                        enabled: args.ppt,
+                        disabled: args.no_ppt,
+                        output_dir: args.ppt_output_dir,
+                    });
+                build_request(
+                    args.common,
+                    args.kind,
+                    today,
+                    today,
+                    weekly_ppt_args,
+                    loaded_config,
+                )
+                .map(|request| AppCommand::Doctor { request, json })
+            }
+            Command::Skill(args) => Ok(build_skill_command(args)),
             Command::Update(args) => Ok(AppCommand::Update(UpdateOptions {
                 check_only: args.check,
                 requested_version: args.version,
@@ -197,6 +283,35 @@ impl Cli {
                 release_repo: args.release_repo,
             })),
         }
+    }
+}
+
+fn build_skill_command(args: SkillArgs) -> AppCommand {
+    match args.command {
+        SkillCommand::Install(args) => AppCommand::Skill {
+            options: SkillOptions {
+                action: SkillAction::Install,
+                codex_home: args.codex_home,
+                force: args.force,
+            },
+            json: args.json,
+        },
+        SkillCommand::Uninstall(args) => AppCommand::Skill {
+            options: SkillOptions {
+                action: SkillAction::Uninstall,
+                codex_home: args.codex_home,
+                force: false,
+            },
+            json: args.json,
+        },
+        SkillCommand::Status(args) => AppCommand::Skill {
+            options: SkillOptions {
+                action: SkillAction::Status,
+                codex_home: args.codex_home,
+                force: false,
+            },
+            json: args.json,
+        },
     }
 }
 
@@ -216,6 +331,16 @@ fn parse_author_match_mode(value: &str) -> Result<AuthorMatchMode, String> {
     }
 }
 
+fn parse_report_kind(value: &str) -> Result<ReportKind, String> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "daily" => Ok(ReportKind::Daily),
+        "weekly" => Ok(ReportKind::Weekly),
+        _ => Err(format!(
+            "invalid report kind `{value}`: expected `daily` or `weekly`"
+        )),
+    }
+}
+
 fn build_request(
     common: CommonArgs,
     kind: ReportKind,
@@ -228,6 +353,7 @@ fn build_request(
     validate_output_conflict(&common, config_values)?;
 
     let CommonArgs {
+        config: _,
         repos,
         template,
         output,
@@ -242,6 +368,7 @@ fn build_request(
         polish_model,
         polish_timeout_secs,
         codex_home,
+        json: _,
     } = common;
 
     let mut repo_paths = resolve_repo_paths(

@@ -4,7 +4,7 @@ use std::fmt;
 use std::path::PathBuf;
 
 use chrono::NaiveDate;
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 
 /// 报告类型。
 #[derive(Debug, Clone, Copy)]
@@ -14,7 +14,7 @@ pub enum ReportKind {
 }
 
 impl ReportKind {
-    pub(crate) fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Daily => "daily",
             Self::Weekly => "weekly",
@@ -95,6 +95,43 @@ pub struct GeneratedReport {
     pub output_path: PathBuf,
     pub polish_state: PolishState,
     pub ppt_path: Option<PathBuf>,
+}
+
+/// 环境与输入预检结果。
+#[derive(Debug, Clone, Serialize)]
+pub struct DoctorReport {
+    pub ok: bool,
+    pub checks: Vec<DoctorCheck>,
+}
+
+/// 单项预检结果。
+#[derive(Debug, Clone, Serialize)]
+pub struct DoctorCheck {
+    pub name: String,
+    pub status: DoctorCheckStatus,
+    pub message: String,
+}
+
+/// 单项预检状态。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DoctorCheckStatus {
+    Pass,
+    Warn,
+    Fail,
+}
+
+impl Serialize for DoctorCheckStatus {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let value = match self {
+            Self::Pass => "pass",
+            Self::Warn => "warn",
+            Self::Fail => "fail",
+        };
+        serializer.serialize_str(value)
+    }
 }
 
 /// Codex 润色状态。
