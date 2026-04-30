@@ -154,6 +154,8 @@ fn git_output<const N: usize>(repo_path: &Path, args: [&str; N]) -> Result<Strin
 
 fn git_output_owned(repo_path: &Path, args: Vec<String>) -> Result<String> {
     let output = Command::new("git")
+        .arg("-c")
+        .arg("core.quotepath=false")
         .arg("-C")
         .arg(repo_path)
         .args(&args)
@@ -173,7 +175,10 @@ fn git_output_owned(repo_path: &Path, args: Vec<String>) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn parses_commits_from_git_log_output() {
@@ -184,5 +189,69 @@ mod tests {
         assert_eq!(commits.len(), 1);
         assert_eq!(commits[0].hash, "abc");
         assert_eq!(commits[0].subject, "feat: add cli");
+    }
+
+    #[test]
+    fn git_output_uses_unquoted_unicode_paths() {
+        let temp = tempdir().unwrap();
+        let repo_path = temp.path();
+
+        let status = Command::new("git")
+            .arg("init")
+            .arg(repo_path)
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        let status = Command::new("git")
+            .arg("-C")
+            .arg(repo_path)
+            .args(["config", "user.name", "Test User"])
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        let status = Command::new("git")
+            .arg("-C")
+            .arg(repo_path)
+            .args(["config", "user.email", "test@example.com"])
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        let file_path = repo_path.join("templates/周报与日报_markdown_模板.md");
+        fs::create_dir_all(file_path.parent().unwrap()).unwrap();
+        fs::write(&file_path, "# demo").unwrap();
+
+        let status = Command::new("git")
+            .arg("-C")
+            .arg(repo_path)
+            .args(["add", "."])
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        let status = Command::new("git")
+            .arg("-C")
+            .arg(repo_path)
+            .args(["commit", "-m", "test"])
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        let output = git_output_owned(
+            repo_path,
+            vec![
+                "show".to_string(),
+                "--pretty=format:".to_string(),
+                "--name-only".to_string(),
+                "HEAD".to_string(),
+            ],
+        )
+        .unwrap();
+
+        assert!(output.contains("templates/周报与日报_markdown_模板.md"));
+        assert!(!output.contains("\\345"));
+        assert!(!output.contains('\"'));
     }
 }
