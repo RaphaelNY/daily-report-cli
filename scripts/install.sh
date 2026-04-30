@@ -14,7 +14,7 @@ Usage: daily_git-installer.sh [options]
 
 Options:
   --prefix <dir>     Install under <dir>/bin and <dir>/share/daily_git
-  --version <ver>    Install a specific version, for example 0.1.1
+  --version <ver>    Install a specific version, for example 0.1.2
   --archive <path>   Install from a local archive instead of GitHub Release
   --skip-path        Do not modify shell PATH startup files
   -h, --help         Show this help message
