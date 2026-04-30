@@ -180,8 +180,10 @@ pub(crate) struct CommitInfo {
     pub(crate) modules_display: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub(crate) struct DocumentInfo {
+    pub(crate) repo_name: String,
+    pub(crate) repo_path: String,
     pub(crate) path: String,
     pub(crate) title: String,
     pub(crate) excerpt: String,

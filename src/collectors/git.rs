@@ -18,6 +18,7 @@ use crate::core::utils::{collect_modules, format_git_date, join_or_dash, normali
 
 const RECORD_SEPARATOR: char = '\u{1e}';
 const FIELD_SEPARATOR: char = '\u{1f}';
+const NUL_SEPARATOR: char = '\0';
 
 #[derive(Debug, Clone)]
 struct RawCommit {
@@ -27,6 +28,7 @@ struct RawCommit {
     date: String,
     subject: String,
     body: String,
+    files: Vec<String>,
 }
 
 /// 确认目标目录为 Git 工作区。
@@ -71,43 +73,38 @@ pub(crate) fn collect_commits(
         format!("--since={since}"),
         format!("--until={until}"),
         "--date=iso-strict".to_string(),
+        "--name-only".to_string(),
+        "--no-renames".to_string(),
+        "-z".to_string(),
         format!(
-            "--pretty=format:%H{FIELD_SEPARATOR}%an{FIELD_SEPARATOR}%ae{FIELD_SEPARATOR}%aI{FIELD_SEPARATOR}%s{FIELD_SEPARATOR}%b{RECORD_SEPARATOR}"
+            "--pretty=format:{RECORD_SEPARATOR}%H{FIELD_SEPARATOR}%an{FIELD_SEPARATOR}%ae{FIELD_SEPARATOR}%aI{FIELD_SEPARATOR}%s{FIELD_SEPARATOR}%b%x00"
         ),
     ];
 
     let raw_output = git_output_owned(repo_path, args)?;
-    let mut commits = Vec::new();
-    for raw_commit in parse_commits(&raw_output) {
-        let files = git_output_owned(
-            repo_path,
-            vec![
-                "show".to_string(),
-                "--pretty=format:".to_string(),
-                "--name-only".to_string(),
-                "--no-renames".to_string(),
-                raw_commit.hash.clone(),
-            ],
-        )?;
-        let files = parse_file_list(&files);
-        let modules = collect_modules(files.iter());
-        commits.push(CommitInfo {
-            repo_name: repo.name.clone(),
-            repo_path: repo.path.clone(),
-            short_hash: raw_commit.hash.chars().take(7).collect(),
-            hash: raw_commit.hash,
-            author: raw_commit.author,
-            email: raw_commit.email,
-            date: format_git_date(&raw_commit.date),
-            subject: normalize_whitespace(&raw_commit.subject),
-            summary: String::new(),
-            body: raw_commit.body.trim().to_string(),
-            files_display: join_or_dash(&files),
-            modules_display: join_or_dash(&modules),
-            files,
-            modules,
-        });
-    }
+    let commits = parse_commits(&raw_output)
+        .into_iter()
+        .map(|raw_commit| {
+            let files = raw_commit.files;
+            let modules = collect_modules(files.iter());
+            CommitInfo {
+                repo_name: repo.name.clone(),
+                repo_path: repo.path.clone(),
+                short_hash: raw_commit.hash.chars().take(7).collect(),
+                hash: raw_commit.hash,
+                author: raw_commit.author,
+                email: raw_commit.email,
+                date: format_git_date(&raw_commit.date),
+                subject: normalize_whitespace(&raw_commit.subject),
+                summary: String::new(),
+                body: raw_commit.body.trim().to_string(),
+                files_display: join_or_dash(&files),
+                modules_display: join_or_dash(&modules),
+                files,
+                modules,
+            }
+        })
+        .collect::<Vec<_>>();
 
     Ok(filter_commits_by_author(
         commits,
@@ -117,31 +114,54 @@ pub(crate) fn collect_commits(
 }
 
 fn parse_commits(output: &str) -> Vec<RawCommit> {
-    output
-        .split(RECORD_SEPARATOR)
-        .filter_map(|record| {
-            let trimmed = record.trim();
-            if trimmed.is_empty() {
-                return None;
-            }
+    let mut commits = Vec::new();
 
-            let mut parts = trimmed.splitn(6, FIELD_SEPARATOR);
-            Some(RawCommit {
-                hash: parts.next()?.to_string(),
-                author: parts.next()?.to_string(),
-                email: parts.next()?.to_string(),
-                date: parts.next()?.to_string(),
-                subject: parts.next()?.to_string(),
-                body: parts.next().unwrap_or_default().to_string(),
-            })
-        })
-        .collect()
+    for record in output.split(RECORD_SEPARATOR) {
+        let trimmed = record.trim_matches(|character| matches!(character, '\n' | '\r' | '\0'));
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        let (header, file_block) = match trimmed.split_once(NUL_SEPARATOR) {
+            Some((header, file_block)) if !header.trim().is_empty() => (header.trim(), file_block),
+            _ => continue,
+        };
+
+        let mut parts = header.splitn(6, FIELD_SEPARATOR);
+        let Some(hash) = parts.next() else {
+            continue;
+        };
+        let Some(author) = parts.next() else {
+            continue;
+        };
+        let Some(email) = parts.next() else {
+            continue;
+        };
+        let Some(date) = parts.next() else {
+            continue;
+        };
+        let Some(subject) = parts.next() else {
+            continue;
+        };
+        let body = parts.next().unwrap_or_default();
+        commits.push(RawCommit {
+            hash: hash.to_string(),
+            author: author.to_string(),
+            email: email.to_string(),
+            date: date.to_string(),
+            subject: subject.to_string(),
+            body: body.to_string(),
+            files: parse_file_list(file_block),
+        });
+    }
+
+    commits
 }
 
 fn parse_file_list(output: &str) -> Vec<String> {
     let mut seen = HashSet::new();
     output
-        .lines()
+        .split(['\n', '\0'])
         .map(str::trim)
         .filter(|line| !line.is_empty())
         .filter(|line| seen.insert((*line).to_string()))
@@ -216,12 +236,17 @@ mod tests {
     #[test]
     fn parses_commits_from_git_log_output() {
         let output = format!(
-            "abc{FIELD_SEPARATOR}Alice{FIELD_SEPARATOR}alice@example.com{FIELD_SEPARATOR}2025-02-14T10:00:00+08:00{FIELD_SEPARATOR}feat: add cli{FIELD_SEPARATOR}body line{RECORD_SEPARATOR}"
+            "{RECORD_SEPARATOR}abc{FIELD_SEPARATOR}Alice{FIELD_SEPARATOR}alice@example.com{FIELD_SEPARATOR}2025-02-14T10:00:00+08:00{FIELD_SEPARATOR}feat: add cli{FIELD_SEPARATOR}body line\nsecond line{NUL_SEPARATOR}src/main.rs{NUL_SEPARATOR}README.md{NUL_SEPARATOR}"
         );
         let commits = parse_commits(&output);
         assert_eq!(commits.len(), 1);
         assert_eq!(commits[0].hash, "abc");
         assert_eq!(commits[0].subject, "feat: add cli");
+        assert_eq!(commits[0].body, "body line\nsecond line");
+        assert_eq!(
+            commits[0].files,
+            vec!["src/main.rs".to_string(), "README.md".to_string()]
+        );
     }
 
     #[test]
@@ -295,6 +320,14 @@ mod tests {
             .arg("-C")
             .arg(repo_path)
             .args(["config", "user.name", "Test User"])
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        let status = Command::new("git")
+            .arg("-C")
+            .arg(repo_path)
+            .args(["config", "commit.gpgsign", "false"])
             .status()
             .unwrap();
         assert!(status.success());

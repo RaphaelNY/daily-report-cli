@@ -20,12 +20,12 @@
 ## 一、本周计划（Weekly Plan）
 {{#if summary.risks}}
 {{#each summary.risks}}
-- [ ] 跟进：{{this}}
+- [ ] 优先跟进：{{this}}
 {{/each}}
 {{else}}
-{{#if summary.modules}}
-{{#each summary.modules}}
-- [ ] 持续推进 `{{this}}` 相关工作
+{{#if summary.highlights}}
+{{#each summary.highlights}}
+- [ ] 围绕“{{this}}”继续补充验证、联调或收尾工作
 {{/each}}
 {{else}}
 - [ ] 补充本周工作计划
@@ -47,9 +47,9 @@
 ### 2. 完成情况对比（计划 vs 实际）
 | 计划事项 | 完成情况 | 备注 |
 |----------|----------|------|
-{{#if summary.modules}}
-{{#each summary.modules}}
-| 推进 `{{this}}` | 已有提交记录 | 详见下方提交概览 |
+{{#if summary.highlights}}
+{{#each summary.highlights}}
+| 跟进“{{this}}” | 已形成提交记录 | 详见下方提交概览 |
 {{/each}}
 {{else}}
 | 待补充 | 无提交记录 | 可结合项目实际补充 |
@@ -70,7 +70,7 @@
 {{#if summary.risks}}
 {{#each summary.risks}}
 - 风险点：{{this}}
-- 改进措施：补充验证结果、完善文档或拆分后续任务
+- 改进措施：补充验证结果，完善说明文档，并视情况拆分后续跟进任务
 {{/each}}
 {{else}}
 - 风险点：暂无显式风险
@@ -80,9 +80,9 @@
 ---
 
 ## 三、下周计划（Next Week Plan）
-{{#if summary.modules}}
-{{#each summary.modules}}
-- [ ] 继续推进 `{{this}}` 模块
+{{#if summary.highlights}}
+{{#each summary.highlights}}
+- [ ] 延续“{{this}}”相关工作，视需要补充验证、文档或后续拆分任务
 {{/each}}
 {{else}}
 - [ ] 补充下周计划
@@ -95,9 +95,30 @@
 
 {{#each daily_logs}}
 ### {{label}}（{{date}}）
-- 工作内容：{{items_display}}
-- 问题/困难：{{risks_display}}
-- 解决方案：{{solutions_display}}
+{{#if items}}
+- 工作内容：
+{{#each items}}
+  - {{this}}
+{{/each}}
+{{else}}
+- 工作内容：无相关提交或文档记录。
+{{/if}}
+{{#if risks}}
+- 问题/困难：
+{{#each risks}}
+  - {{this}}
+{{/each}}
+{{else}}
+- 问题/困难：无
+{{/if}}
+{{#if solutions}}
+- 解决方案：
+{{#each solutions}}
+  - {{this}}
+{{/each}}
+{{else}}
+- 解决方案：无后续处理项。
+{{/if}}
 
 {{/each}}
 
@@ -122,6 +143,7 @@
 {{#if docs}}
 {{#each docs}}
 ### {{title}}
+- 来源仓库：`{{repo_name}}`
 - 文档路径：`{{path}}`
 - 摘要：{{excerpt}}
 
@@ -151,7 +173,7 @@
 {{/if}}
 
 ### 二、完成情况
-- 已完成：{{summary.modules_display}}
+- 已完成：本日已覆盖 {{summary.modules_display}} 等相关模块或文档改动
 {{#if summary.risks}}
 - 进行中：{{#each summary.risks}}{{this}}；{{/each}}
 {{else}}
@@ -170,15 +192,15 @@
 
 ### 四、解决方案与进展
 - 已采取措施：已完成相关 Git 提交与文件变更
-- 当前进展：{{summary.modules_display}}
+- 当前进展：已在 {{summary.modules_display}} 等范围形成可追溯变更记录
 {{#if docs}}
 - 文档核对：{{#each docs}}{{title}}；{{/each}}
 {{/if}}
 
 ### 五、明日计划
-{{#if summary.modules}}
-{{#each summary.modules}}
-- [ ] 继续推进 `{{this}}` 相关事项
+{{#if summary.highlights}}
+{{#each summary.highlights}}
+- [ ] 延续“{{this}}”相关事项，并补充必要验证、说明文档或后续收尾内容
 {{/each}}
 {{else}}
 - [ ] 补充明日计划
@@ -207,7 +229,7 @@
 ## 文档参考
 {{#if docs}}
 {{#each docs}}
-- `{{path}}`：{{excerpt}}
+- `{{repo_name}}` / `{{path}}`：{{excerpt}}
 {{/each}}
 {{else}}
 - 未发现可用项目文档。

@@ -8,12 +8,13 @@ use anyhow::{Context, Result};
 use chrono::NaiveDate;
 use walkdir::WalkDir;
 
-use crate::core::types::{DocumentInfo, ReportRequest};
+use crate::core::types::{DocumentInfo, RepoInfo, ReportRequest};
 use crate::core::utils::{normalize_whitespace, relative_display};
 
 /// 收集报告上下文里会引用到的文档。
 pub(crate) fn collect_docs(
     request: &ReportRequest,
+    repo: &RepoInfo,
     repo_path: &Path,
     modules: &[String],
 ) -> Result<Vec<DocumentInfo>> {
@@ -33,6 +34,8 @@ pub(crate) fn collect_docs(
         let content = fs::read_to_string(&path)
             .with_context(|| format!("failed to read doc {}", path.display()))?;
         docs.push(DocumentInfo {
+            repo_name: repo.name.clone(),
+            repo_path: repo.path.clone(),
             path: relative_display(repo_path, &path),
             title: extract_title(&content, &path),
             excerpt: extract_excerpt(&content, request.max_doc_chars),
@@ -142,8 +145,8 @@ fn extract_excerpt(content: &str, max_chars: usize) -> String {
     let merged = content
         .lines()
         .map(str::trim)
-        .filter(|line| !line.is_empty() && !line.starts_with('#'))
-        .take(12)
+        .filter(|line| is_excerpt_candidate(line))
+        .take(4)
         .collect::<Vec<_>>()
         .join(" ");
     let compact = normalize_whitespace(&merged);
@@ -154,6 +157,30 @@ fn extract_excerpt(content: &str, max_chars: usize) -> String {
         excerpt.push('…');
         excerpt
     }
+}
+
+fn is_excerpt_candidate(line: &str) -> bool {
+    if line.is_empty() || line.starts_with('#') || line.starts_with("```") {
+        return false;
+    }
+
+    if line.starts_with("- ") || line.starts_with("* ") || line.starts_with("+ ") {
+        return line.chars().count() >= 16
+            && !looks_like_command(line.trim_start_matches(['-', '*', '+', ' ']));
+    }
+
+    !looks_like_command(line)
+}
+
+fn looks_like_command(line: &str) -> bool {
+    let trimmed = line.trim();
+    trimmed.starts_with("cargo ")
+        || trimmed.starts_with("daily_git ")
+        || trimmed.starts_with("./")
+        || trimmed.starts_with("curl ")
+        || trimmed.starts_with("bash ")
+        || trimmed.starts_with("git ")
+        || (trimmed.starts_with('`') && trimmed.ends_with('`'))
 }
 
 fn extract_entry_date(path: &Path) -> Option<String> {
@@ -193,5 +220,17 @@ mod tests {
             Some("2026-04-29".to_string())
         );
         assert_eq!(extract_entry_date(Path::new("README.md")), None);
+    }
+
+    #[test]
+    fn excerpt_skips_command_lines_and_short_list_noise() {
+        let excerpt = extract_excerpt(
+            "# Demo\n\ncargo run -- daily\n- 短项\n一个使用 Rust 编写的本地 CLI，用于读取 Git 提交并生成日报。\n- 支持读取多个仓库并汇总输出",
+            120,
+        );
+
+        assert!(excerpt.contains("一个使用 Rust 编写的本地 CLI"));
+        assert!(!excerpt.contains("cargo run"));
+        assert!(!excerpt.contains("短项"));
     }
 }

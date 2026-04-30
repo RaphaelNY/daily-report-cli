@@ -38,7 +38,7 @@ pub fn generate_report(request: &ReportRequest) -> Result<GeneratedReport> {
         let repo_commits = collect_commits(request, &repo, &canonical_repo_path)?;
         let repo_modules =
             collect_modules(repo_commits.iter().flat_map(|commit| commit.files.iter()));
-        let repo_docs = collect_docs(request, &canonical_repo_path, &repo_modules)?;
+        let repo_docs = collect_docs(request, &repo, &canonical_repo_path, &repo_modules)?;
 
         repo_snapshots.push(RepoSnapshot {
             name: repo.name.clone(),
