@@ -8,8 +8,8 @@ use cli::{AppCommand, Cli};
 use serde::Serialize;
 
 use daily_git::{
-    generate_report, run_doctor, run_update, DoctorCheckStatus, DoctorReport, GeneratedReport,
-    PolishState, ReportKind, UpdateState,
+    generate_report, run_doctor, run_skill_command, run_update, DoctorCheckStatus, DoctorReport,
+    GeneratedReport, PolishState, ReportKind, SkillResult, UpdateState,
 };
 
 #[derive(Serialize)]
@@ -52,6 +52,17 @@ fn main() -> Result<()> {
                 std::process::exit(1);
             }
         }
+        AppCommand::Skill { options, json } => {
+            let result = run_skill_command(&options)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else {
+                print_skill_text(&result);
+            }
+            if !result.ok {
+                std::process::exit(1);
+            }
+        }
         AppCommand::Update(options) => {
             let result = run_update(&options)?;
             match result.state {
@@ -80,6 +91,13 @@ fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn print_skill_text(result: &SkillResult) {
+    println!(
+        "{}: {} ({})",
+        result.action, result.message, result.skill_path
+    );
 }
 
 fn print_doctor_text(report: &DoctorReport) {

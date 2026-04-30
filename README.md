@@ -352,6 +352,22 @@ weekly:
 - 暴露 `doctor` 预检命令，用于在写文件前检查路径和可选依赖
 - 只暴露 `daily` / `weekly` / `doctor`，不暴露 `update`
 
+安装到 Codex skills 目录：
+
+```bash
+daily_git skill install
+daily_git skill status
+daily_git skill uninstall
+```
+
+默认安装到 `$CODEX_HOME/skills/daily-git-skill`；如果没有设置 `CODEX_HOME`，则使用 `~/.codex/skills/daily-git-skill`。也可以显式指定：
+
+```bash
+daily_git skill install --codex-home /path/to/.codex --force
+```
+
+安装命令会写入 `SKILL.md` 和 `run.sh`，并把当前 `daily_git` 可执行文件路径注入 wrapper，便于 agent 调用已安装的二进制。
+
 预检示例：
 
 ```bash

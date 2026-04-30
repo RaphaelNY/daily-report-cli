@@ -11,7 +11,7 @@ use clap::{Args, Parser, Subcommand};
 
 use daily_git::{
     load_config, AuthorMatchMode, LoadedConfig, PolishOptions, PptOptions, ReportFileConfig,
-    ReportKind, ReportRequest, UpdateOptions,
+    ReportKind, ReportRequest, SkillAction, SkillOptions, UpdateOptions,
 };
 
 /// 顶层命令定义。
@@ -32,6 +32,7 @@ pub(crate) struct Cli {
 pub(crate) enum AppCommand {
     Generate { request: ReportRequest, json: bool },
     Doctor { request: ReportRequest, json: bool },
+    Skill { options: SkillOptions, json: bool },
     Update(UpdateOptions),
 }
 
@@ -40,6 +41,7 @@ enum Command {
     Daily(DailyArgs),
     Weekly(WeeklyArgs),
     Doctor(DoctorArgs),
+    Skill(SkillArgs),
     Update(UpdateArgs),
 }
 
@@ -140,6 +142,40 @@ struct DoctorArgs {
 }
 
 #[derive(Args, Debug)]
+struct SkillArgs {
+    #[command(subcommand)]
+    command: SkillCommand,
+}
+
+#[derive(Subcommand, Debug)]
+enum SkillCommand {
+    Install(SkillInstallArgs),
+    Uninstall(SkillSharedArgs),
+    Status(SkillSharedArgs),
+}
+
+#[derive(Args, Debug)]
+struct SkillInstallArgs {
+    #[arg(long)]
+    codex_home: Option<PathBuf>,
+
+    #[arg(long)]
+    force: bool,
+
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(Args, Debug)]
+struct SkillSharedArgs {
+    #[arg(long)]
+    codex_home: Option<PathBuf>,
+
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(Args, Debug)]
 struct UpdateArgs {
     #[arg(long)]
     check: bool,
@@ -157,9 +193,10 @@ struct UpdateArgs {
 impl Cli {
     /// 将命令行参数转换成内部请求对象。
     pub(crate) fn into_command(self) -> Result<AppCommand> {
-        let loaded_config = load_config(self.config.as_deref())?;
-        match self.command {
+        let Cli { config, command } = self;
+        match command {
             Command::Daily(args) => {
+                let loaded_config = load_config(config.as_deref())?;
                 let json = args.common.json;
                 let date = args
                     .date
@@ -180,6 +217,7 @@ impl Cli {
                 .map(|request| AppCommand::Generate { request, json })
             }
             Command::Weekly(args) => {
+                let loaded_config = load_config(config.as_deref())?;
                 let json = args.common.json;
                 let end_date = args
                     .end_date
@@ -216,6 +254,7 @@ impl Cli {
                 .map(|request| AppCommand::Generate { request, json })
             }
             Command::Doctor(args) => {
+                let loaded_config = load_config(config.as_deref())?;
                 let json = args.common.json;
                 let today = Local::now().date_naive();
                 let weekly_ppt_args =
@@ -234,6 +273,7 @@ impl Cli {
                 )
                 .map(|request| AppCommand::Doctor { request, json })
             }
+            Command::Skill(args) => Ok(build_skill_command(args)),
             Command::Update(args) => Ok(AppCommand::Update(UpdateOptions {
                 check_only: args.check,
                 requested_version: args.version,
@@ -241,6 +281,35 @@ impl Cli {
                 release_repo: args.release_repo,
             })),
         }
+    }
+}
+
+fn build_skill_command(args: SkillArgs) -> AppCommand {
+    match args.command {
+        SkillCommand::Install(args) => AppCommand::Skill {
+            options: SkillOptions {
+                action: SkillAction::Install,
+                codex_home: args.codex_home,
+                force: args.force,
+            },
+            json: args.json,
+        },
+        SkillCommand::Uninstall(args) => AppCommand::Skill {
+            options: SkillOptions {
+                action: SkillAction::Uninstall,
+                codex_home: args.codex_home,
+                force: false,
+            },
+            json: args.json,
+        },
+        SkillCommand::Status(args) => AppCommand::Skill {
+            options: SkillOptions {
+                action: SkillAction::Status,
+                codex_home: args.codex_home,
+                force: false,
+            },
+            json: args.json,
+        },
     }
 }
 

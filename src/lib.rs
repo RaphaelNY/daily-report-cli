@@ -11,6 +11,7 @@ mod config;
 mod core;
 mod doctor;
 mod reporting;
+mod skill;
 mod update;
 
 pub use config::{load_config, LoadedConfig, ReportFileConfig};
@@ -20,4 +21,5 @@ pub use core::types::{
 };
 pub use doctor::run_doctor;
 pub use reporting::generate_report;
+pub use skill::{run_skill_command, SkillAction, SkillOptions, SkillResult};
 pub use update::{run_update, UpdateOptions, UpdateResult, UpdateState};

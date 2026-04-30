@@ -16,7 +16,11 @@ fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
-binary="${DAILY_GIT_BIN:-}"
+installed_binary="@DAILY_GIT_BIN@"
+if [[ "$installed_binary" == "@"*"@" ]]; then
+  installed_binary=""
+fi
+binary="${DAILY_GIT_BIN:-$installed_binary}"
 
 if [[ -z "$binary" ]]; then
   if [[ -x "$repo_root/target/debug/daily_git" ]]; then

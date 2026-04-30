@@ -157,6 +157,26 @@ daily_git weekly \
 - 支持 `doctor` 预检
 - 只允许 `daily` / `weekly` / `doctor`
 
+安装、检查和卸载：
+
+```bash
+daily_git skill install
+daily_git skill status
+daily_git skill uninstall
+```
+
+默认目标目录是 `$CODEX_HOME/skills/daily-git-skill`，未设置 `CODEX_HOME` 时使用 `~/.codex/skills/daily-git-skill`。如需覆盖已有安装：
+
+```bash
+daily_git skill install --force
+```
+
+如需安装到自定义 Codex home：
+
+```bash
+daily_git skill install --codex-home /path/to/.codex
+```
+
 预检示例：
 
 ```bash
