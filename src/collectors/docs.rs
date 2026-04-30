@@ -5,6 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use chrono::NaiveDate;
 use walkdir::WalkDir;
 
 use crate::core::types::{DocumentInfo, ReportRequest};
@@ -35,6 +36,8 @@ pub(crate) fn collect_docs(
             path: relative_display(repo_path, &path),
             title: extract_title(&content, &path),
             excerpt: extract_excerpt(&content, request.max_doc_chars),
+            content: content.clone(),
+            entry_date: extract_entry_date(&path),
         });
     }
     Ok(docs)
@@ -153,6 +156,20 @@ fn extract_excerpt(content: &str, max_chars: usize) -> String {
     }
 }
 
+fn extract_entry_date(path: &Path) -> Option<String> {
+    let stem = path.file_stem()?.to_str()?.trim();
+    let normalized = stem.replace('_', "-");
+    for candidate in [normalized.as_str(), stem] {
+        if let Ok(date) = NaiveDate::parse_from_str(candidate, "%Y-%m-%d") {
+            return Some(date.format("%Y-%m-%d").to_string());
+        }
+        if let Ok(date) = NaiveDate::parse_from_str(candidate, "%Y-%-m-%-d") {
+            return Some(date.format("%Y-%m-%d").to_string());
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -163,5 +180,18 @@ mod tests {
             extract_title("# Hello\n\nBody", Path::new("README.md")),
             "Hello".to_string()
         );
+    }
+
+    #[test]
+    fn extracts_entry_date_from_daily_doc_filename() {
+        assert_eq!(
+            extract_entry_date(Path::new("2026-4-28.md")),
+            Some("2026-04-28".to_string())
+        );
+        assert_eq!(
+            extract_entry_date(Path::new("2026-04-29.md")),
+            Some("2026-04-29".to_string())
+        );
+        assert_eq!(extract_entry_date(Path::new("README.md")), None);
     }
 }

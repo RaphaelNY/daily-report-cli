@@ -185,6 +185,8 @@ pub(crate) struct DocumentInfo {
     pub(crate) path: String,
     pub(crate) title: String,
     pub(crate) excerpt: String,
+    pub(crate) content: String,
+    pub(crate) entry_date: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -195,4 +197,6 @@ pub(crate) struct DailyLogInfo {
     pub(crate) items_display: String,
     pub(crate) risks: Vec<String>,
     pub(crate) risks_display: String,
+    pub(crate) solutions: Vec<String>,
+    pub(crate) solutions_display: String,
 }

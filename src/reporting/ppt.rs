@@ -880,6 +880,8 @@ mod tests {
                 path: "README.md".to_string(),
                 title: "README".to_string(),
                 excerpt: "Project overview".to_string(),
+                content: "Project overview".to_string(),
+                entry_date: None,
             }],
             daily_logs: vec![
                 DailyLogInfo {
@@ -889,6 +891,8 @@ mod tests {
                     items_display: "-".to_string(),
                     risks: Vec::new(),
                     risks_display: "-".to_string(),
+                    solutions: Vec::new(),
+                    solutions_display: "-".to_string(),
                 },
                 DailyLogInfo {
                     label: "周二".to_string(),
@@ -897,6 +901,8 @@ mod tests {
                     items_display: "-".to_string(),
                     risks: Vec::new(),
                     risks_display: "-".to_string(),
+                    solutions: Vec::new(),
+                    solutions_display: "-".to_string(),
                 },
                 DailyLogInfo {
                     label: "周三".to_string(),
@@ -905,6 +911,8 @@ mod tests {
                     items_display: "-".to_string(),
                     risks: Vec::new(),
                     risks_display: "-".to_string(),
+                    solutions: Vec::new(),
+                    solutions_display: "-".to_string(),
                 },
                 DailyLogInfo {
                     label: "周四".to_string(),
@@ -913,6 +921,8 @@ mod tests {
                     items_display: "docs: update readme".to_string(),
                     risks: vec!["todo: follow up release".to_string()],
                     risks_display: "todo: follow up release".to_string(),
+                    solutions: Vec::new(),
+                    solutions_display: "-".to_string(),
                 },
                 DailyLogInfo {
                     label: "周五".to_string(),
@@ -921,6 +931,8 @@ mod tests {
                     items_display: "feat: add cli".to_string(),
                     risks: Vec::new(),
                     risks_display: "-".to_string(),
+                    solutions: Vec::new(),
+                    solutions_display: "-".to_string(),
                 },
             ],
         }

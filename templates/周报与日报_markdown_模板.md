@@ -97,7 +97,7 @@
 ### {{label}}（{{date}}）
 - 工作内容：{{items_display}}
 - 问题/困难：{{risks_display}}
-- 解决方案：结合对应提交详情和项目文档继续补充
+- 解决方案：{{solutions_display}}
 
 {{/each}}
 
