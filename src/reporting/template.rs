@@ -102,6 +102,7 @@ fn build_summary(commits: &[CommitInfo], modules: &[String]) -> SummaryInfo {
         .len()
         > 1;
     let highlights = summarize_commit_groups(commits, multi_repo);
+    let work_items = build_work_items(commits, modules, multi_repo);
 
     let risks = commits
         .iter()
@@ -117,11 +118,117 @@ fn build_summary(commits: &[CommitInfo], modules: &[String]) -> SummaryInfo {
 
     SummaryInfo {
         highlights,
+        work_items,
         plan_items,
         modules: modules.to_vec(),
         modules_display: join_or_dash(modules),
         risks,
     }
+}
+
+fn build_work_items(commits: &[CommitInfo], modules: &[String], multi_repo: bool) -> Vec<String> {
+    if commits.is_empty() {
+        return Vec::new();
+    }
+
+    struct WorkItemCandidate {
+        module: String,
+        item: String,
+        commit_count: usize,
+        has_non_routine: bool,
+    }
+
+    let mut candidates = Vec::new();
+    for module in modules {
+        let related = commits
+            .iter()
+            .filter(|commit| commit.modules.iter().any(|item| item == module))
+            .collect::<Vec<_>>();
+        if related.is_empty() {
+            continue;
+        }
+
+        let mut routine_summaries = Vec::new();
+        let mut non_routine_summaries = Vec::new();
+        let mut summary_seen = HashSet::new();
+        for commit in &related {
+            let summary = summarized_highlight_text(&commit.summary);
+            if !summary.is_empty() && summary_seen.insert(summary.clone()) {
+                if is_routine_release_item(&summary) {
+                    routine_summaries.push(summary);
+                } else {
+                    non_routine_summaries.push(summary);
+                }
+            }
+        }
+
+        let has_non_routine = !non_routine_summaries.is_empty();
+        let summaries = if has_non_routine {
+            &non_routine_summaries
+        } else {
+            &routine_summaries
+        };
+        let details = if summaries.is_empty() {
+            "整理相关文件与提交记录".to_string()
+        } else {
+            summaries
+                .iter()
+                .take(3)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join("；")
+        };
+        let scope = if multi_repo {
+            let mut repos = Vec::new();
+            for commit in &related {
+                if !repos.contains(&commit.repo_name) {
+                    repos.push(commit.repo_name.clone());
+                }
+            }
+            format!("{}：", repos.join("、"))
+        } else {
+            String::new()
+        };
+        let item = format!(
+            "{scope}围绕 `{module}` 完成 {} 次提交，主要涉及：{details}",
+            related.len()
+        );
+        candidates.push(WorkItemCandidate {
+            module: module.clone(),
+            item,
+            commit_count: related.len(),
+            has_non_routine,
+        });
+    }
+
+    candidates.sort_by(|left, right| {
+        right
+            .has_non_routine
+            .cmp(&left.has_non_routine)
+            .then_with(|| right.commit_count.cmp(&left.commit_count))
+            .then_with(|| left.module.cmp(&right.module))
+    });
+
+    let mut items = Vec::new();
+    let mut seen = HashSet::new();
+    for candidate in candidates {
+        if seen.insert(candidate.item.clone()) {
+            items.push(candidate.item);
+        }
+        if items.len() >= 5 {
+            break;
+        }
+    }
+
+    if items.is_empty() {
+        return summarize_commit_groups(commits, multi_repo)
+            .into_iter()
+            .take(5)
+            .map(|item| format!("推进相关提交：{item}"))
+            .collect();
+    }
+
+    items
 }
 
 fn build_plan_items(highlights: &[String], modules: &[String], risks: &[String]) -> Vec<String> {
@@ -201,7 +308,14 @@ fn extract_risk(text: &str) -> Option<String> {
         "阻塞",
         "风险",
     ];
-    let contextual_keywords = ["todo", "pending", "temporary", "follow-up", "followup", "跟进"];
+    let contextual_keywords = [
+        "todo",
+        "pending",
+        "temporary",
+        "follow-up",
+        "followup",
+        "跟进",
+    ];
     let has_strong_keyword = strong_keywords
         .iter()
         .any(|keyword| lowered.contains(keyword));
@@ -582,6 +696,7 @@ mod tests {
             },
             summary: SummaryInfo {
                 highlights: Vec::new(),
+                work_items: Vec::new(),
                 plan_items: Vec::new(),
                 modules: vec!["src".to_string()],
                 modules_display: "src, `README.md`".to_string(),
@@ -641,6 +756,10 @@ mod tests {
             summary.highlights,
             vec!["repo-a、repo-b：完善命令行入口".to_string()]
         );
+        assert_eq!(
+            summary.work_items,
+            vec!["repo-a、repo-b：围绕 `src` 完成 2 次提交，主要涉及：完善命令行入口".to_string()]
+        );
         assert!(!summary.plan_items.is_empty());
         assert!(summary.plan_items[0].contains("完善命令行入口"));
     }
@@ -687,7 +806,10 @@ mod tests {
             &["src".to_string()],
         );
 
-        assert!(summary.plan_items.iter().any(|item| item.contains("周报网页幻灯片")));
+        assert!(summary
+            .plan_items
+            .iter()
+            .any(|item| item.contains("周报网页幻灯片")));
         assert!(summary.plan_items.len() <= 5);
     }
 
@@ -742,7 +864,10 @@ mod tests {
     #[test]
     fn follow_up_commit_subject_is_not_treated_as_risk() {
         assert_eq!(extract_risk("focus report follow-up plan items"), None);
-        assert_eq!(extract_risk("todo: follow up release"), Some("todo: follow up release".to_string()));
+        assert_eq!(
+            extract_risk("todo: follow up release"),
+            Some("todo: follow up release".to_string())
+        );
     }
 
     #[test]

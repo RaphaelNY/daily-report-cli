@@ -164,8 +164,8 @@
 ## 📅 日期：{{report.start_date}}
 
 ### 一、今日工作内容
-{{#if summary.highlights}}
-{{#each summary.highlights}}
+{{#if summary.work_items}}
+{{#each summary.work_items}}
 - {{this}}
 {{/each}}
 {{else}}

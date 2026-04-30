@@ -176,12 +176,20 @@ fn compact_file_list(files: &[String]) -> String {
     }
 
     let preview_count = 4;
-    let preview = files.iter().take(preview_count).cloned().collect::<Vec<_>>();
+    let preview = files
+        .iter()
+        .take(preview_count)
+        .cloned()
+        .collect::<Vec<_>>();
     if files.len() <= preview_count {
         return preview.join(", ");
     }
 
-    format!("{}，另外还有 {} 个文件", preview.join(", "), files.len() - preview_count)
+    format!(
+        "{}，另外还有 {} 个文件",
+        preview.join(", "),
+        files.len() - preview_count
+    )
 }
 
 fn filter_commits_by_author(
