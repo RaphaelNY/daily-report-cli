@@ -763,7 +763,8 @@ mod tests {
 
     use super::*;
     use crate::core::types::{
-        DailyLogInfo, DocumentInfo, PolishOptions, RepoInfo, ReportInfo, ReportRequest, SummaryInfo,
+        AuthorMatchMode, DailyLogInfo, DocumentInfo, PolishOptions, RepoInfo, RepoSnapshot,
+        ReportInfo, ReportRequest, SummaryInfo,
     };
 
     #[test]
@@ -781,12 +782,13 @@ mod tests {
     fn resolves_default_ppt_output_dir() {
         let request = ReportRequest {
             kind: ReportKind::Weekly,
-            repo_path: PathBuf::from("."),
+            repo_paths: vec![PathBuf::from(".")],
             template_path: None,
             output_path: None,
             output_dir: Some(PathBuf::from("reports")),
             doc_paths: Vec::new(),
             author: None,
+            author_match_mode: AuthorMatchMode::NameOrEmail,
             start_date: NaiveDate::from_ymd_opt(2025, 2, 10).unwrap(),
             end_date: NaiveDate::from_ymd_opt(2025, 2, 14).unwrap(),
             max_docs: 6,
@@ -818,11 +820,17 @@ mod tests {
                 path: "/tmp/demo-repo".to_string(),
                 branch: "main".to_string(),
             },
+            repos: vec![RepoSnapshot {
+                name: "demo-repo".to_string(),
+                path: "/tmp/demo-repo".to_string(),
+                branch: "main".to_string(),
+            }],
             report: ReportInfo {
                 kind: "weekly".to_string(),
                 title: "周报".to_string(),
                 start_date: "2025-02-10".to_string(),
                 end_date: "2025-02-14".to_string(),
+                repo_count: 1,
                 commit_count: 2,
                 file_count: 3,
                 is_daily: false,
@@ -836,12 +844,15 @@ mod tests {
             },
             commits: vec![
                 CommitInfo {
+                    repo_name: "demo-repo".to_string(),
+                    repo_path: "/tmp/demo-repo".to_string(),
                     hash: "abc".to_string(),
                     short_hash: "abc".to_string(),
                     author: "Raphael".to_string(),
                     email: "raphael@example.com".to_string(),
                     date: "2025-02-14".to_string(),
                     subject: "feat: add cli".to_string(),
+                    summary: "新增命令行入口支持".to_string(),
                     body: String::new(),
                     files: vec!["src/main.rs".to_string(), "src/cli/mod.rs".to_string()],
                     files_display: "src/main.rs, src/cli/mod.rs".to_string(),
@@ -849,12 +860,15 @@ mod tests {
                     modules_display: "src".to_string(),
                 },
                 CommitInfo {
+                    repo_name: "demo-repo".to_string(),
+                    repo_path: "/tmp/demo-repo".to_string(),
                     hash: "def".to_string(),
                     short_hash: "def".to_string(),
                     author: "Raphael".to_string(),
                     email: "raphael@example.com".to_string(),
                     date: "2025-02-13".to_string(),
                     subject: "docs: update readme".to_string(),
+                    summary: "更新项目说明文档".to_string(),
                     body: "todo: follow up release".to_string(),
                     files: vec!["README.md".to_string()],
                     files_display: "README.md".to_string(),

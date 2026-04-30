@@ -2,10 +2,20 @@
 # 📊 {{repo.name}} 周报（{{report.start_date}} ~ {{report.end_date}}）
 
 > 生成时间：{{generated_at}}
+> 仓库数量：{{report.repo_count}}
 > 分支：`{{repo.branch}}`
 > 提交数量：{{report.commit_count}}，涉及文件：{{report.file_count}}
 
 ---
+
+{{#if repos}}
+## 关联仓库
+{{#each repos}}
+- `{{name}}`：{{path}}（{{branch}}）
+{{/each}}
+
+---
+{{/if}}
 
 ## 一、本周计划（Weekly Plan）
 {{#if summary.risks}}
@@ -94,7 +104,8 @@
 ## 五、提交概览
 {{#if commits}}
 {{#each commits}}
-### {{date}} · {{short_hash}} {{subject}}
+### {{date}} · {{summary}}
+- 来源仓库：`{{repo_name}}`
 - 作者：{{author}} <{{email}}>
 - 影响模块：{{modules_display}}
 - 变更文件：{{files_display}}
@@ -124,6 +135,7 @@
 # 📝 {{repo.name}} 日报（{{report.start_date}}）
 
 > 生成时间：{{generated_at}}
+> 仓库数量：{{report.repo_count}}
 > 分支：`{{repo.branch}}`
 > 提交数量：{{report.commit_count}}，涉及文件：{{report.file_count}}
 
@@ -186,7 +198,7 @@
 ## 参考提交
 {{#if commits}}
 {{#each commits}}
-- `{{short_hash}}` {{subject}}（{{files_display}}）
+- `{{repo_name}}` / {{summary}}（{{files_display}}）
 {{/each}}
 {{else}}
 - 暂无提交记录

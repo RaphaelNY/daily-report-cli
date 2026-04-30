@@ -16,12 +16,15 @@ use serde::Deserialize;
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct ReportFileConfig {
     pub repo: Option<PathBuf>,
+    #[serde(default)]
+    pub repos: Vec<PathBuf>,
     pub template: Option<PathBuf>,
     pub output: Option<PathBuf>,
     pub output_dir: Option<PathBuf>,
     #[serde(default)]
     pub docs: Vec<PathBuf>,
     pub author: Option<String>,
+    pub author_match: Option<String>,
     pub max_docs: Option<usize>,
     pub max_doc_chars: Option<usize>,
     #[serde(default)]
@@ -155,8 +158,12 @@ mod tests {
         let config: ReportFileConfig = serde_yaml::from_str(
             r#"
 repo: .
+repos:
+  - ./workspace-a
+  - ./workspace-b
 template: ./templates/周报与日报_markdown_模板.md
 author: Raphael
+author_match: email
 max_docs: 8
 polish:
   enabled: true
@@ -171,7 +178,15 @@ weekly:
         .unwrap();
 
         assert_eq!(config.author.as_deref(), Some("Raphael"));
+        assert_eq!(config.author_match.as_deref(), Some("email"));
         assert_eq!(config.max_docs, Some(8));
+        assert_eq!(
+            config.repos,
+            vec![
+                PathBuf::from("./workspace-a"),
+                PathBuf::from("./workspace-b")
+            ]
+        );
         assert_eq!(config.polish.timeout_secs, Some(120));
         assert_eq!(config.weekly.days, Some(5));
         assert_eq!(config.weekly.ppt.enabled, Some(true));

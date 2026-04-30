@@ -2,7 +2,7 @@
 //!
 //! 这里单独拆出命令行相关代码，避免 `main.rs` 混入业务逻辑。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use chrono::{Duration, Local, NaiveDate};
@@ -10,8 +10,8 @@ use clap::ArgAction;
 use clap::{Args, Parser, Subcommand};
 
 use daily_git::{
-    load_config, LoadedConfig, PolishOptions, PptOptions, ReportFileConfig, ReportKind,
-    ReportRequest, UpdateOptions,
+    load_config, AuthorMatchMode, LoadedConfig, PolishOptions, PptOptions, ReportFileConfig,
+    ReportKind, ReportRequest, UpdateOptions,
 };
 
 /// 顶层命令定义。
@@ -43,8 +43,8 @@ enum Command {
 
 #[derive(Args, Debug)]
 struct CommonArgs {
-    #[arg(long)]
-    repo: Option<PathBuf>,
+    #[arg(long = "repo")]
+    repos: Vec<PathBuf>,
 
     #[arg(long)]
     template: Option<PathBuf>,
@@ -60,6 +60,9 @@ struct CommonArgs {
 
     #[arg(long)]
     author: Option<String>,
+
+    #[arg(long, value_parser = parse_author_match_mode)]
+    author_match: Option<AuthorMatchMode>,
 
     #[arg(long)]
     max_docs: Option<usize>,
@@ -202,6 +205,17 @@ fn parse_date(value: &str) -> Result<NaiveDate, String> {
         .map_err(|error| format!("invalid date `{value}`: {error}"))
 }
 
+fn parse_author_match_mode(value: &str) -> Result<AuthorMatchMode, String> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "name" => Ok(AuthorMatchMode::Name),
+        "email" => Ok(AuthorMatchMode::Email),
+        "name_or_email" | "any" => Ok(AuthorMatchMode::NameOrEmail),
+        _ => Err(format!(
+            "invalid author match mode `{value}`: expected one of `name`, `email`, `name_or_email`"
+        )),
+    }
+}
+
 fn build_request(
     common: CommonArgs,
     kind: ReportKind,
@@ -214,12 +228,13 @@ fn build_request(
     validate_output_conflict(&common, config_values)?;
 
     let CommonArgs {
-        repo,
+        repos,
         template,
         output,
         output_dir,
         docs,
         author,
+        author_match,
         max_docs,
         max_doc_chars,
         no_polish,
@@ -229,12 +244,14 @@ fn build_request(
         codex_home,
     } = common;
 
-    let repo_path = resolve_path(
-        repo,
-        config_values.and_then(|config| config.repo.clone()),
+    let mut repo_paths = resolve_repo_paths(
+        repos,
+        config_values,
         loaded_config.as_ref(),
         PathBuf::from("."),
     );
+    repo_paths.sort();
+    repo_paths.dedup();
 
     let template_path = resolve_optional_path(
         template,
@@ -254,6 +271,7 @@ fn build_request(
     };
 
     let author = author.or_else(|| config_values.and_then(|config| config.author.clone()));
+    let author_match_mode = resolve_author_match_mode(author_match, config_values)?;
 
     let max_docs = max_docs
         .or_else(|| config_values.and_then(|config| config.max_docs))
@@ -275,16 +293,18 @@ fn build_request(
         config_values.and_then(|config| config.polish.codex_home.clone()),
         loaded_config.as_ref(),
     );
+    let codex_home = codex_home.map(|path| absolutize_path(&path));
     let ppt = resolve_ppt_options(kind, weekly_ppt_args, config_values, loaded_config.as_ref());
 
     Ok(ReportRequest {
         kind,
-        repo_path,
+        repo_paths,
         template_path,
         output_path,
         output_dir,
         doc_paths,
         author,
+        author_match_mode,
         start_date,
         end_date,
         max_docs,
@@ -355,24 +375,36 @@ fn resolve_output_targets(
     (output_path, output_dir)
 }
 
-fn resolve_path(
-    cli_value: Option<PathBuf>,
-    config_value: Option<PathBuf>,
+fn resolve_repo_paths(
+    cli_repos: Vec<PathBuf>,
+    config: Option<&ReportFileConfig>,
     loaded_config: Option<&LoadedConfig>,
     default_value: PathBuf,
-) -> PathBuf {
-    if let Some(path) = cli_value {
-        return path;
+) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    paths.extend(cli_repos);
+
+    if !paths.is_empty() {
+        return paths;
     }
 
-    if let Some(path) = config_value {
-        if let Some(config) = loaded_config {
-            return config.resolve_path(&path);
+    if let Some(config) = config {
+        if !config.repos.is_empty() {
+            return match loaded_config {
+                Some(loaded) => loaded.resolve_paths(&config.repos),
+                None => config.repos.clone(),
+            };
         }
-        return path;
+
+        if let Some(path) = config.repo.clone() {
+            return vec![match loaded_config {
+                Some(loaded) => loaded.resolve_path(&path),
+                None => path,
+            }];
+        }
     }
 
-    default_value
+    vec![default_value]
 }
 
 fn resolve_optional_path(
@@ -388,6 +420,16 @@ fn resolve_optional_path(
         Some(config) => config.resolve_path(&path),
         None => path,
     })
+}
+
+fn absolutize_path(path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map(|cwd| cwd.join(path))
+            .unwrap_or_else(|_| path.to_path_buf())
+    }
 }
 
 fn resolve_polish_enabled(
@@ -444,5 +486,24 @@ fn resolve_ppt_options(
     PptOptions {
         enabled,
         output_dir,
+    }
+}
+
+fn resolve_author_match_mode(
+    cli_value: Option<AuthorMatchMode>,
+    config: Option<&ReportFileConfig>,
+) -> Result<AuthorMatchMode> {
+    if let Some(mode) = cli_value {
+        return Ok(mode);
+    }
+
+    match config.and_then(|config| config.author_match.as_deref()) {
+        Some("name") => Ok(AuthorMatchMode::Name),
+        Some("email") => Ok(AuthorMatchMode::Email),
+        Some("name_or_email") | Some("any") => Ok(AuthorMatchMode::NameOrEmail),
+        Some(other) => bail!(
+            "invalid `author_match` in config: `{other}`; expected `name`, `email`, or `name_or_email`"
+        ),
+        None => Ok(AuthorMatchMode::NameOrEmail),
     }
 }

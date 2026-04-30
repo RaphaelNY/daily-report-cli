@@ -13,7 +13,7 @@ use std::process::Command;
 
 use anyhow::{anyhow, bail, Context, Result};
 
-use crate::core::types::{CommitInfo, RepoInfo, ReportRequest};
+use crate::core::types::{AuthorMatchMode, CommitInfo, RepoInfo, ReportRequest};
 use crate::core::utils::{collect_modules, format_git_date, join_or_dash, normalize_whitespace};
 
 const RECORD_SEPARATOR: char = '\u{1e}';
@@ -60,12 +60,13 @@ pub(crate) fn load_repo_info(repo_path: &Path) -> Result<RepoInfo> {
 /// 按请求中的时间范围和作者过滤条件收集提交。
 pub(crate) fn collect_commits(
     request: &ReportRequest,
+    repo: &RepoInfo,
     repo_path: &Path,
 ) -> Result<Vec<CommitInfo>> {
     let since = format!("{}T00:00:00", request.start_date.format("%Y-%m-%d"));
     let until = format!("{}T23:59:59", request.end_date.format("%Y-%m-%d"));
 
-    let mut args = vec![
+    let args = vec![
         "log".to_string(),
         format!("--since={since}"),
         format!("--until={until}"),
@@ -74,10 +75,6 @@ pub(crate) fn collect_commits(
             "--pretty=format:%H{FIELD_SEPARATOR}%an{FIELD_SEPARATOR}%ae{FIELD_SEPARATOR}%aI{FIELD_SEPARATOR}%s{FIELD_SEPARATOR}%b{RECORD_SEPARATOR}"
         ),
     ];
-
-    if let Some(author) = &request.author {
-        args.push(format!("--author={author}"));
-    }
 
     let raw_output = git_output_owned(repo_path, args)?;
     let mut commits = Vec::new();
@@ -95,12 +92,15 @@ pub(crate) fn collect_commits(
         let files = parse_file_list(&files);
         let modules = collect_modules(files.iter());
         commits.push(CommitInfo {
+            repo_name: repo.name.clone(),
+            repo_path: repo.path.clone(),
             short_hash: raw_commit.hash.chars().take(7).collect(),
             hash: raw_commit.hash,
             author: raw_commit.author,
             email: raw_commit.email,
             date: format_git_date(&raw_commit.date),
             subject: normalize_whitespace(&raw_commit.subject),
+            summary: String::new(),
             body: raw_commit.body.trim().to_string(),
             files_display: join_or_dash(&files),
             modules_display: join_or_dash(&modules),
@@ -109,7 +109,11 @@ pub(crate) fn collect_commits(
         });
     }
 
-    Ok(commits)
+    Ok(filter_commits_by_author(
+        commits,
+        request.author.as_deref(),
+        request.author_match_mode,
+    ))
 }
 
 fn parse_commits(output: &str) -> Vec<RawCommit> {
@@ -143,6 +147,35 @@ fn parse_file_list(output: &str) -> Vec<String> {
         .filter(|line| seen.insert((*line).to_string()))
         .map(ToString::to_string)
         .collect()
+}
+
+fn filter_commits_by_author(
+    commits: Vec<CommitInfo>,
+    author: Option<&str>,
+    match_mode: AuthorMatchMode,
+) -> Vec<CommitInfo> {
+    let Some(author) = author.map(str::trim).filter(|value| !value.is_empty()) else {
+        return commits;
+    };
+
+    commits
+        .into_iter()
+        .filter(|commit| author_matches(commit, author, match_mode))
+        .collect()
+}
+
+fn author_matches(commit: &CommitInfo, author: &str, match_mode: AuthorMatchMode) -> bool {
+    match match_mode {
+        AuthorMatchMode::Name => normalized_eq(&commit.author, author),
+        AuthorMatchMode::Email => normalized_eq(&commit.email, author),
+        AuthorMatchMode::NameOrEmail => {
+            normalized_eq(&commit.author, author) || normalized_eq(&commit.email, author)
+        }
+    }
+}
+
+fn normalized_eq(left: &str, right: &str) -> bool {
+    left.trim().eq_ignore_ascii_case(right.trim())
 }
 
 fn git_output<const N: usize>(repo_path: &Path, args: [&str; N]) -> Result<String> {
@@ -189,6 +222,61 @@ mod tests {
         assert_eq!(commits.len(), 1);
         assert_eq!(commits[0].hash, "abc");
         assert_eq!(commits[0].subject, "feat: add cli");
+    }
+
+    #[test]
+    fn filters_commits_by_exact_name_or_email() {
+        let commits = vec![
+            CommitInfo {
+                repo_name: "demo".to_string(),
+                repo_path: "/tmp/demo".to_string(),
+                hash: "1".to_string(),
+                short_hash: "1".to_string(),
+                author: "Raphael".to_string(),
+                email: "raphael@example.com".to_string(),
+                date: "2025-02-14".to_string(),
+                subject: "feat: one".to_string(),
+                summary: String::new(),
+                body: String::new(),
+                files: vec!["src/main.rs".to_string()],
+                files_display: "src/main.rs".to_string(),
+                modules: vec!["src".to_string()],
+                modules_display: "src".to_string(),
+            },
+            CommitInfo {
+                repo_name: "demo".to_string(),
+                repo_path: "/tmp/demo".to_string(),
+                hash: "2".to_string(),
+                short_hash: "2".to_string(),
+                author: "Another".to_string(),
+                email: "another@example.com".to_string(),
+                date: "2025-02-14".to_string(),
+                subject: "feat: two".to_string(),
+                summary: String::new(),
+                body: String::new(),
+                files: vec!["src/lib.rs".to_string()],
+                files_display: "src/lib.rs".to_string(),
+                modules: vec!["src".to_string()],
+                modules_display: "src".to_string(),
+            },
+        ];
+
+        let by_name =
+            filter_commits_by_author(commits.clone(), Some("Raphael"), AuthorMatchMode::Name);
+        assert_eq!(by_name.len(), 1);
+        assert_eq!(by_name[0].hash, "1");
+
+        let by_email = filter_commits_by_author(
+            commits.clone(),
+            Some("raphael@example.com"),
+            AuthorMatchMode::Email,
+        );
+        assert_eq!(by_email.len(), 1);
+        assert_eq!(by_email[0].hash, "1");
+
+        let no_partial =
+            filter_commits_by_author(commits, Some("Rap"), AuthorMatchMode::NameOrEmail);
+        assert!(no_partial.is_empty());
     }
 
     #[test]

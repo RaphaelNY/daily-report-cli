@@ -222,7 +222,10 @@ fn install_release_files(
 
     let templates_source = package_root.join("templates");
     if templates_source.is_dir() {
-        sync_directory(&templates_source, &install_layout.share_dir.join("templates"))?;
+        sync_directory(
+            &templates_source,
+            &install_layout.share_dir.join("templates"),
+        )?;
     }
 
     copy_if_present(
@@ -301,9 +304,11 @@ fn sync_directory(source: &Path, destination: &Path) -> Result<()> {
     fs::create_dir_all(destination)
         .with_context(|| format!("failed to create {}", destination.display()))?;
 
-    for entry in fs::read_dir(source).with_context(|| format!("failed to read {}", source.display()))?
+    for entry in
+        fs::read_dir(source).with_context(|| format!("failed to read {}", source.display()))?
     {
-        let entry = entry.with_context(|| format!("failed to read entry in {}", source.display()))?;
+        let entry =
+            entry.with_context(|| format!("failed to read entry in {}", source.display()))?;
         let target = destination.join(entry.file_name());
         let path = entry.path();
         if path.is_dir() {
@@ -319,9 +324,12 @@ fn sync_directory(source: &Path, destination: &Path) -> Result<()> {
 }
 
 fn resolve_install_layout(executable_path: &Path) -> Result<InstallLayout> {
-    let executable_dir = executable_path
-        .parent()
-        .with_context(|| format!("failed to determine directory of {}", executable_path.display()))?;
+    let executable_dir = executable_path.parent().with_context(|| {
+        format!(
+            "failed to determine directory of {}",
+            executable_path.display()
+        )
+    })?;
     let prefix_dir = match executable_dir.file_name() {
         Some(name) if name == OsStr::new("bin") => executable_dir
             .parent()
@@ -377,9 +385,9 @@ fn user_agent() -> String {
 
 fn format_http_error(prefix: &str, url: &str, error: ureq::Error) -> anyhow::Error {
     match error {
-        ureq::Error::Status(404, _) => anyhow::anyhow!(
-            "{prefix}: no published GitHub Release was found at {url}"
-        ),
+        ureq::Error::Status(404, _) => {
+            anyhow::anyhow!("{prefix}: no published GitHub Release was found at {url}")
+        }
         ureq::Error::Status(code, response) => anyhow::anyhow!(
             "{prefix}: {url}: status code {code} {}",
             response.status_text()
@@ -396,8 +404,12 @@ fn set_executable_permissions(path: &Path) -> Result<()> {
         .with_context(|| format!("failed to read metadata for {}", path.display()))?
         .permissions();
     permissions.set_mode(0o755);
-    fs::set_permissions(path, permissions)
-        .with_context(|| format!("failed to set executable permissions for {}", path.display()))
+    fs::set_permissions(path, permissions).with_context(|| {
+        format!(
+            "failed to set executable permissions for {}",
+            path.display()
+        )
+    })
 }
 
 #[cfg(not(unix))]
@@ -426,9 +438,11 @@ mod tests {
 
     #[test]
     fn resolves_share_dir_from_bin_prefix() {
-        let layout =
-            resolve_install_layout(Path::new("/tmp/daily/bin/daily_git")).unwrap();
-        assert_eq!(layout.share_dir, PathBuf::from("/tmp/daily/share/daily_git"));
+        let layout = resolve_install_layout(Path::new("/tmp/daily/bin/daily_git")).unwrap();
+        assert_eq!(
+            layout.share_dir,
+            PathBuf::from("/tmp/daily/share/daily_git")
+        );
     }
 
     #[test]

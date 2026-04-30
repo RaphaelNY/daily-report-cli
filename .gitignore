@@ -2,3 +2,12 @@
 /.cargo-home
 /.codex-home
 .DS_Store
+/reports
+/reports*/
+/tmp_test_output*/
+/tmp_multi_repo_output*/
+/preview*/
+/daily-*.md
+/weekly-*.md
+/daily-*-ppt/
+/weekly-*-ppt/

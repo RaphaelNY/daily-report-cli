@@ -3,9 +3,14 @@
 
 # 目标仓库路径；相对路径以当前配置文件所在目录为基准
 repo: .
+# 如果需要聚合多个项目目录，可改用 repos
+# repos:
+#   - ../project-a
+#   - ../project-b
 
 # 可选：自定义作者过滤
 # author: Raphael
+# author_match: name_or_email
 
 # 可选：自定义模板；默认使用本仓库内的中文模板
 template: ./templates/周报与日报_markdown_模板.md

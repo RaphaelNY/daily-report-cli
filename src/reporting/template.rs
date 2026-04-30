@@ -9,8 +9,8 @@ use chrono::{Datelike, Days, Local};
 use handlebars::Handlebars;
 
 use crate::core::types::{
-    CommitInfo, DailyLogInfo, DocumentInfo, RepoInfo, ReportContext, ReportInfo, ReportKind,
-    ReportRequest, SummaryInfo,
+    CommitInfo, DailyLogInfo, DocumentInfo, RepoInfo, RepoSnapshot, ReportContext, ReportInfo,
+    ReportKind, ReportRequest, SummaryInfo,
 };
 use crate::core::utils::{
     collect_modules, join_or_dash, normalize_whitespace, sanitize_name, weekday_label,
@@ -23,6 +23,7 @@ const DEFAULT_WEEKLY_TEMPLATE: &str = include_str!("../../templates/weekly.md.hb
 pub(crate) fn build_context(
     request: &ReportRequest,
     repo: RepoInfo,
+    repos: Vec<RepoSnapshot>,
     commits: Vec<CommitInfo>,
     docs: Vec<DocumentInfo>,
 ) -> ReportContext {
@@ -34,6 +35,7 @@ pub(crate) fn build_context(
     ReportContext {
         generated_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
         repo,
+        repos,
         report,
         summary,
         commits,
@@ -94,10 +96,21 @@ fn default_template(kind: ReportKind) -> &'static str {
 fn build_summary(commits: &[CommitInfo], modules: &[String]) -> SummaryInfo {
     let mut highlights = Vec::new();
     let mut seen = HashSet::new();
+    let multi_repo = commits
+        .iter()
+        .map(|commit| commit.repo_name.as_str())
+        .collect::<HashSet<_>>()
+        .len()
+        > 1;
     for commit in commits {
-        let normalized = normalize_whitespace(&commit.subject);
-        if !normalized.is_empty() && seen.insert(normalized.clone()) {
-            highlights.push(normalized);
+        let normalized = normalize_whitespace(&commit.summary);
+        let display = if multi_repo {
+            format!("{}：{}", commit.repo_name, normalized)
+        } else {
+            normalized.clone()
+        };
+        if !normalized.is_empty() && seen.insert(display.clone()) {
+            highlights.push(display);
         }
     }
 
@@ -135,6 +148,7 @@ fn build_report_info(
         title: request.kind.display_name().to_string(),
         start_date: request.start_date.format("%Y-%m-%d").to_string(),
         end_date: request.end_date.format("%Y-%m-%d").to_string(),
+        repo_count: request.repo_paths.len(),
         commit_count,
         file_count,
         is_daily: matches!(request.kind, ReportKind::Daily),
@@ -158,7 +172,13 @@ fn build_daily_logs(request: &ReportRequest, commits: &[CommitInfo]) -> Vec<Dail
         let items = commits
             .iter()
             .filter(|commit| commit.date == date)
-            .map(|commit| commit.subject.clone())
+            .map(|commit| {
+                if request.repo_paths.len() > 1 {
+                    format!("{}：{}", commit.repo_name, commit.summary)
+                } else {
+                    commit.summary.clone()
+                }
+            })
             .collect::<Vec<_>>();
         let risks = commits
             .iter()
@@ -197,12 +217,13 @@ mod tests {
     fn resolves_default_output_name() {
         let request = ReportRequest {
             kind: ReportKind::Daily,
-            repo_path: PathBuf::from("."),
+            repo_paths: vec![PathBuf::from(".")],
             template_path: None,
             output_path: None,
             output_dir: Some(PathBuf::from("reports")),
             doc_paths: Vec::new(),
             author: None,
+            author_match_mode: crate::core::types::AuthorMatchMode::NameOrEmail,
             start_date: NaiveDate::from_ymd_opt(2025, 2, 14).unwrap(),
             end_date: NaiveDate::from_ymd_opt(2025, 2, 14).unwrap(),
             max_docs: 6,

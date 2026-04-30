@@ -29,6 +29,20 @@ impl ReportKind {
     }
 }
 
+/// 作者匹配方式。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthorMatchMode {
+    Name,
+    Email,
+    NameOrEmail,
+}
+
+impl Default for AuthorMatchMode {
+    fn default() -> Self {
+        Self::NameOrEmail
+    }
+}
+
 /// 大模型润色配置。
 #[derive(Debug, Clone)]
 pub struct PolishOptions {
@@ -60,12 +74,13 @@ pub struct PptOptions {
 #[derive(Debug, Clone)]
 pub struct ReportRequest {
     pub kind: ReportKind,
-    pub repo_path: PathBuf,
+    pub repo_paths: Vec<PathBuf>,
     pub template_path: Option<PathBuf>,
     pub output_path: Option<PathBuf>,
     pub output_dir: Option<PathBuf>,
     pub doc_paths: Vec<PathBuf>,
     pub author: Option<String>,
+    pub author_match_mode: AuthorMatchMode,
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
     pub max_docs: usize,
@@ -104,6 +119,7 @@ impl fmt::Display for PolishState {
 pub(crate) struct ReportContext {
     pub(crate) generated_at: String,
     pub(crate) repo: RepoInfo,
+    pub(crate) repos: Vec<RepoSnapshot>,
     pub(crate) report: ReportInfo,
     pub(crate) summary: SummaryInfo,
     pub(crate) commits: Vec<CommitInfo>,
@@ -118,12 +134,20 @@ pub(crate) struct RepoInfo {
     pub(crate) branch: String,
 }
 
+#[derive(Debug, Serialize, Clone)]
+pub(crate) struct RepoSnapshot {
+    pub(crate) name: String,
+    pub(crate) path: String,
+    pub(crate) branch: String,
+}
+
 #[derive(Debug, Serialize)]
 pub(crate) struct ReportInfo {
     pub(crate) kind: String,
     pub(crate) title: String,
     pub(crate) start_date: String,
     pub(crate) end_date: String,
+    pub(crate) repo_count: usize,
     pub(crate) commit_count: usize,
     pub(crate) file_count: usize,
     pub(crate) is_daily: bool,
@@ -140,12 +164,15 @@ pub(crate) struct SummaryInfo {
 
 #[derive(Debug, Serialize, Clone)]
 pub(crate) struct CommitInfo {
+    pub(crate) repo_name: String,
+    pub(crate) repo_path: String,
     pub(crate) hash: String,
     pub(crate) short_hash: String,
     pub(crate) author: String,
     pub(crate) email: String,
     pub(crate) date: String,
     pub(crate) subject: String,
+    pub(crate) summary: String,
     pub(crate) body: String,
     pub(crate) files: Vec<String>,
     pub(crate) files_display: String,

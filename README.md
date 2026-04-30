@@ -4,9 +4,9 @@
 
 ## 功能
 
-- 读取指定仓库的当日或最近一周 Git 提交
+- 读取一个或多个仓库的当日或最近一周 Git 提交，并聚合成一份日报 / 周报
 - 支持通过 `config.yaml` 固化仓库、模板、输出目录、润色策略等默认值
-- 支持 `--author` 过滤指定作者
+- 支持 `--author` 过滤指定提交者，并通过 `--author-match` 精确匹配姓名 / 邮箱
 - 自动扫描仓库根目录 `README*.md` 与 `docs/`、`doc/` 下的 Markdown 文档
 - 支持通过 `--doc` 显式指定文档路径
 - 支持内置模板，也支持通过 `--template` 指定自定义 Markdown 模板
@@ -21,6 +21,16 @@ cargo run -- daily --repo /path/to/project
 cargo run -- weekly --repo /path/to/project --end-date 2025-02-14
 ```
 
+聚合多个项目目录：
+
+```bash
+cargo run -- weekly \
+  --repo /path/to/project-a \
+  --repo /path/to/project-b \
+  --author "raphael@example.com" \
+  --author-match email
+```
+
 编译后可直接执行：
 
 ```bash
@@ -33,6 +43,8 @@ cargo build --release
 ```bash
 daily_git --config ./config.yaml daily
 ```
+
+更完整的命令、配置和多仓库使用说明见 [USAGE.md](./USAGE.md)。
 
 如果只是想在另一台设备上使用，不一定需要重新安装 Rust。这个项目已经适合按“预编译二进制 + 压缩包”分发。
 
@@ -183,6 +195,18 @@ daily_git weekly \
   --output-dir ./reports
 ```
 
+聚合多个仓库并按作者邮箱精确过滤：
+
+```bash
+daily_git weekly \
+  --repo /path/to/project-a \
+  --repo /path/to/project-b \
+  --end-date 2025-02-14 \
+  --days 7 \
+  --author "raphael@example.com" \
+  --author-match email
+```
+
 生成周报并同时输出 HTML PPT deck：
 
 ```bash
@@ -240,9 +264,14 @@ daily_git weekly --config ./config.yaml
 
 ```yaml
 repo: .
+repos:
+  - ../project-a
+  - ../project-b
 template: ./templates/周报与日报_markdown_模板.md
 output_dir: ./reports
 docs: []
+author: raphael@example.com
+author_match: email
 max_docs: 6
 max_doc_chars: 280
 
@@ -262,11 +291,13 @@ weekly:
 支持的主要字段：
 
 - `repo`
+- `repos`
 - `template`
 - `output`
 - `output_dir`
 - `docs`
 - `author`
+- `author_match`
 - `max_docs`
 - `max_doc_chars`
 - `polish.enabled`
@@ -280,6 +311,17 @@ weekly:
 - `weekly.ppt.output_dir`
 
 其中，配置文件中的相对路径会基于该 `config.yaml` 所在目录解析。
+
+作者过滤说明：
+
+- `--author <VALUE>` / `author: <VALUE>`：指定要保留的提交者
+- `--author-match name`：只匹配 commit author name
+- `--author-match email`：只匹配 commit author email
+- `--author-match name_or_email`：默认值，同时接受姓名或邮箱精确匹配
+
+这里的匹配发生在 commit 被解析之后，不再依赖 `git log --author` 的模糊正则式过滤，所以更适合多仓库汇总和团队协作场景。
+
+如果你希望集中查看“怎么用这个工具”，包括多仓库、PPT、`CODEX_HOME` 和本地测试输出忽略规则，建议直接看 [USAGE.md](./USAGE.md)。
 
 ## 周报 PPT
 

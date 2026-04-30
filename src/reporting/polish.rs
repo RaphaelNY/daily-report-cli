@@ -11,13 +11,43 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use serde_json::Value;
 use wait_timeout::ChildExt;
 
-use crate::core::types::{PolishOptions, PolishState, RepoInfo, ReportKind};
+use crate::core::types::{CommitInfo, PolishOptions, PolishState, RepoInfo, ReportKind};
 
 pub(crate) struct PolishResult {
     pub(crate) content: String,
     pub(crate) state: PolishState,
+}
+
+/// 尝试为提交生成简要摘要。失败时返回原始 subject。
+pub(crate) fn summarize_commits(
+    options: &PolishOptions,
+    repo: &RepoInfo,
+    commits: &[CommitInfo],
+) -> Vec<String> {
+    if commits.is_empty() {
+        return Vec::new();
+    }
+
+    match check_codex_ready(options) {
+        CodexReady::Ready => {}
+        CodexReady::Skipped(_) => {
+            return commits
+                .iter()
+                .map(|commit| commit.subject.clone())
+                .collect()
+        }
+    }
+
+    match run_codex_exec(options, repo, build_commit_summaries_prompt(commits)) {
+        Ok(raw) => parse_commit_summaries(&raw, commits),
+        Err(_) => commits
+            .iter()
+            .map(|commit| commit.subject.clone())
+            .collect(),
+    }
 }
 
 /// 尝试使用本机 `codex exec` 对渲染结果做润色。
@@ -43,7 +73,7 @@ pub(crate) fn polish_markdown(
         CodexReady::Skipped(reason) => return fallback(markdown, PolishState::Skipped(reason)),
     }
 
-    match run_codex_exec(options, repo, kind, markdown) {
+    match run_codex_exec(options, repo, build_prompt(repo, kind, markdown)) {
         Ok(polished) if polished.trim().is_empty() => fallback(
             markdown,
             PolishState::Failed("Codex 返回了空内容".to_string()),
@@ -82,11 +112,9 @@ fn check_codex_ready(options: &PolishOptions) -> CodexReady {
 fn run_codex_exec(
     options: &PolishOptions,
     repo: &RepoInfo,
-    kind: ReportKind,
-    markdown: &str,
+    prompt: String,
 ) -> Result<String, String> {
     let output_file = temp_output_path();
-    let prompt = build_prompt(repo, kind, markdown);
 
     let mut command = Command::new("codex");
     command
@@ -176,6 +204,105 @@ fn build_prompt(repo: &RepoInfo, kind: ReportKind, markdown: &str) -> String {
     )
 }
 
+fn build_commit_summaries_prompt(commits: &[CommitInfo]) -> String {
+    let payload = commits
+        .iter()
+        .enumerate()
+        .map(|(index, commit)| {
+            format!(
+                "提交 #{index}\n标题：{subject}\n正文：{body}\n涉及文件：{files}\n涉及模块：{modules}",
+                index = index + 1,
+                subject = commit.subject,
+                body = if commit.body.trim().is_empty() {
+                    "-"
+                } else {
+                    commit.body.trim()
+                },
+                files = commit.files_display,
+                modules = commit.modules_display,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n");
+
+    format!(
+        r#"请根据下面这些 Git 提交信息，为每条提交分别输出一句简短、自然、专业的中文工作摘要。
+
+硬性要求：
+1. 只输出 JSON 数组，不要 Markdown，不要解释，不要代码块。
+2. 数组长度必须与提交数量一致，按原顺序一一对应。
+3. 每个元素都是 1 句话，不要分点。
+4. 不要保留 commit hash，不要照抄 Conventional Commit 前缀如 feat:/fix:/docs:。
+5. 长度控制在 18 到 40 个中文字符之间。
+6. 只能根据给定信息总结，不要脑补业务背景。
+7. 如果信息不足，就保守概括修改对象和动作。
+
+示例输出：
+["完善周报 PPT 生成链路","修复 Git 中文路径转义问题"]
+
+提交列表如下：
+
+{payload}"#,
+        payload = payload,
+    )
+}
+
+fn parse_commit_summaries(raw: &str, commits: &[CommitInfo]) -> Vec<String> {
+    let cleaned = strip_code_fences(raw).trim();
+    let parsed = serde_json::from_str::<Value>(cleaned)
+        .ok()
+        .and_then(|value| value.as_array().cloned());
+
+    let Some(items) = parsed else {
+        return commits
+            .iter()
+            .map(|commit| commit.subject.clone())
+            .collect();
+    };
+
+    if items.len() != commits.len() {
+        return commits
+            .iter()
+            .map(|commit| commit.subject.clone())
+            .collect();
+    }
+
+    items
+        .into_iter()
+        .zip(commits.iter())
+        .map(|(item, commit)| {
+            item.as_str()
+                .map(|summary| normalize_summary(summary, &commit.subject))
+                .unwrap_or_else(|| commit.subject.clone())
+        })
+        .collect()
+}
+
+fn strip_code_fences(input: &str) -> &str {
+    let trimmed = input.trim();
+    if let Some(stripped) = trimmed.strip_prefix("```json") {
+        return stripped.strip_suffix("```").unwrap_or(stripped).trim();
+    }
+    if let Some(stripped) = trimmed.strip_prefix("```") {
+        return stripped.strip_suffix("```").unwrap_or(stripped).trim();
+    }
+    trimmed
+}
+
+fn normalize_summary(summary: &str, fallback: &str) -> String {
+    let cleaned = summary
+        .trim()
+        .trim_matches('`')
+        .trim_matches('"')
+        .trim_matches('。')
+        .trim();
+    if cleaned.is_empty() {
+        fallback.to_string()
+    } else {
+        cleaned.to_string()
+    }
+}
+
 fn apply_codex_env(command: &mut Command, options: &PolishOptions) {
     if let Some(codex_home) = &options.codex_home {
         command.env("CODEX_HOME", codex_home);
@@ -233,5 +360,52 @@ mod tests {
         assert!(prompt.contains("日报"));
         assert!(prompt.contains("demo"));
         assert!(prompt.contains("# Title"));
+    }
+
+    #[test]
+    fn builds_commit_summary_prompt_with_context() {
+        let prompt = build_commit_summaries_prompt(&[CommitInfo {
+            repo_name: "demo".to_string(),
+            repo_path: "/tmp/demo".to_string(),
+            hash: "abc".to_string(),
+            short_hash: "abc".to_string(),
+            author: "Alice".to_string(),
+            email: "alice@example.com".to_string(),
+            date: "2025-02-14".to_string(),
+            subject: "feat: add cli".to_string(),
+            summary: String::new(),
+            body: "support weekly reports".to_string(),
+            files: vec!["src/main.rs".to_string()],
+            files_display: "src/main.rs".to_string(),
+            modules: vec!["src".to_string()],
+            modules_display: "src".to_string(),
+        }]);
+
+        assert!(prompt.contains("提交 #1"));
+        assert!(prompt.contains("feat: add cli"));
+        assert!(prompt.contains("src/main.rs"));
+    }
+
+    #[test]
+    fn parses_commit_summaries_from_json_array() {
+        let commits = vec![CommitInfo {
+            repo_name: "demo".to_string(),
+            repo_path: "/tmp/demo".to_string(),
+            hash: "abc".to_string(),
+            short_hash: "abc".to_string(),
+            author: "Alice".to_string(),
+            email: "alice@example.com".to_string(),
+            date: "2025-02-14".to_string(),
+            subject: "feat: add cli".to_string(),
+            summary: String::new(),
+            body: String::new(),
+            files: vec!["src/main.rs".to_string()],
+            files_display: "src/main.rs".to_string(),
+            modules: vec!["src".to_string()],
+            modules_display: "src".to_string(),
+        }];
+
+        let summaries = parse_commit_summaries("[\"完善命令行入口支持\"]", &commits);
+        assert_eq!(summaries, vec!["完善命令行入口支持".to_string()]);
     }
 }

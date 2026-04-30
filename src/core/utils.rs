@@ -56,6 +56,28 @@ pub(crate) fn sanitize_name(input: &str) -> String {
     sanitized.trim_matches('-').to_string()
 }
 
+/// 根据多个仓库名生成稳定可读的聚合标签。
+pub(crate) fn summarize_repo_names(names: &[String]) -> String {
+    if names.is_empty() {
+        return "repo".to_string();
+    }
+
+    if names.len() == 1 {
+        return names[0].clone();
+    }
+
+    let mut sorted = names.to_vec();
+    sorted.sort();
+    sorted.dedup();
+
+    let preview = sorted.iter().take(3).cloned().collect::<Vec<_>>();
+    let mut label = preview.join("-");
+    if sorted.len() > 3 {
+        label.push_str(&format!("-and-{}-more", sorted.len() - 3));
+    }
+    label
+}
+
 /// 将 Git ISO 时间转换成报告里更易读的日期格式。
 pub(crate) fn format_git_date(input: &str) -> String {
     input
@@ -104,5 +126,18 @@ mod tests {
     #[test]
     fn sanitizes_repo_name_for_output() {
         assert_eq!(sanitize_name("My Repo!"), "my-repo");
+    }
+
+    #[test]
+    fn summarizes_multiple_repo_names() {
+        assert_eq!(
+            summarize_repo_names(&[
+                "workspace-b".to_string(),
+                "workspace-a".to_string(),
+                "workspace-c".to_string(),
+                "workspace-d".to_string()
+            ]),
+            "workspace-a-workspace-b-workspace-c-and-1-more".to_string()
+        );
     }
 }
