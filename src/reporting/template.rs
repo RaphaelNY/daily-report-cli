@@ -95,29 +95,13 @@ fn default_template(kind: ReportKind) -> &'static str {
 }
 
 fn build_summary(commits: &[CommitInfo], modules: &[String]) -> SummaryInfo {
-    let mut highlights = Vec::new();
-    let mut seen = HashSet::new();
     let multi_repo = commits
         .iter()
         .map(|commit| commit.repo_name.as_str())
         .collect::<HashSet<_>>()
         .len()
         > 1;
-    if multi_repo {
-        for (summary, repos) in aggregate_commit_summaries(commits) {
-            let display = format!("{}：{}", repos.join("、"), summary);
-            if seen.insert(display.clone()) {
-                highlights.push(display);
-            }
-        }
-    } else {
-        for commit in commits {
-            let normalized = normalize_whitespace(&commit.summary);
-            if !normalized.is_empty() && seen.insert(normalized.clone()) {
-                highlights.push(normalized);
-            }
-        }
-    }
+    let highlights = summarize_commit_groups(commits, multi_repo);
 
     let risks = commits
         .iter()
@@ -198,16 +182,11 @@ fn is_routine_release_item(highlight: &str) -> bool {
 
 fn extract_risk(text: &str) -> Option<String> {
     let lowered = text.to_ascii_lowercase();
-    let keywords = [
-        "todo",
+    let strong_keywords = [
         "fixme",
         "wip",
         "risk",
         "blocker",
-        "follow-up",
-        "followup",
-        "pending",
-        "temporary",
         "rollback",
         "revert",
         "failed",
@@ -222,9 +201,21 @@ fn extract_risk(text: &str) -> Option<String> {
         "权限",
         "阻塞",
         "风险",
-        "跟进",
     ];
-    if keywords.iter().any(|keyword| lowered.contains(keyword)) {
+    let contextual_keywords = ["todo", "pending", "temporary", "follow-up", "followup", "跟进"];
+    let has_strong_keyword = strong_keywords
+        .iter()
+        .any(|keyword| lowered.contains(keyword));
+    let has_contextual_keyword = contextual_keywords
+        .iter()
+        .any(|keyword| lowered.contains(keyword));
+    let looks_like_issue_statement = text.contains("问题")
+        || text.contains("困难")
+        || text.contains("待确认")
+        || text.contains(":")
+        || text.contains("：");
+
+    if has_strong_keyword || (has_contextual_keyword && looks_like_issue_statement) {
         Some(normalize_whitespace(text))
     } else {
         None
@@ -236,7 +227,7 @@ fn aggregate_commit_summaries(commits: &[CommitInfo]) -> Vec<(String, Vec<String
     let mut indexes: BTreeMap<String, usize> = BTreeMap::new();
 
     for commit in commits {
-        let summary = normalize_whitespace(&commit.summary);
+        let summary = summarized_highlight_text(&commit.summary);
         if summary.is_empty() {
             continue;
         }
@@ -254,6 +245,42 @@ fn aggregate_commit_summaries(commits: &[CommitInfo]) -> Vec<(String, Vec<String
     }
 
     grouped
+}
+
+fn summarize_commit_groups(commits: &[CommitInfo], multi_repo: bool) -> Vec<String> {
+    let mut items = Vec::new();
+    let mut seen = HashSet::new();
+
+    if multi_repo {
+        for (summary, repos) in aggregate_commit_summaries(commits) {
+            let display = format!("{}：{}", repos.join("、"), summary);
+            if seen.insert(display.clone()) {
+                items.push(display);
+            }
+        }
+        return items;
+    }
+
+    for commit in commits {
+        let normalized = summarized_highlight_text(&commit.summary);
+        if !normalized.is_empty() && seen.insert(normalized.clone()) {
+            items.push(normalized);
+        }
+    }
+    items
+}
+
+fn summarized_highlight_text(summary: &str) -> String {
+    let normalized = normalize_whitespace(summary);
+    if normalized.is_empty() {
+        return normalized;
+    }
+
+    if is_routine_release_item(&normalized) {
+        return "同步完成版本升级、锁文件刷新与相关说明更新".to_string();
+    }
+
+    normalized
 }
 
 fn build_report_info(
@@ -361,30 +388,19 @@ fn build_daily_logs(
 }
 
 fn summarize_daily_commit_items(commits: &[&CommitInfo], multi_repo: bool) -> Vec<String> {
-    let mut items = Vec::new();
-    let mut seen = HashSet::new();
-
     if multi_repo {
         let owned = commits
             .iter()
             .map(|commit| (*commit).clone())
             .collect::<Vec<_>>();
-        for (summary, repos) in aggregate_commit_summaries(&owned) {
-            let display = format!("{}：{}", repos.join("、"), summary);
-            if seen.insert(display.clone()) {
-                items.push(display);
-            }
-        }
-        return items;
+        return summarize_commit_groups(&owned, true);
     }
 
-    for commit in commits {
-        let normalized = normalize_whitespace(&commit.summary);
-        if !normalized.is_empty() && seen.insert(normalized.clone()) {
-            items.push(normalized);
-        }
-    }
-    items
+    let owned = commits
+        .iter()
+        .map(|commit| (*commit).clone())
+        .collect::<Vec<_>>();
+    summarize_commit_groups(&owned, false)
 }
 
 fn dedupe_entries(entries: Vec<String>) -> Vec<String> {
@@ -659,5 +675,57 @@ mod tests {
 
         assert!(summary.plan_items.iter().any(|item| item.contains("周报网页幻灯片")));
         assert!(summary.plan_items.len() <= 5);
+    }
+
+    #[test]
+    fn summary_collapses_multiple_release_bumps_into_one_highlight() {
+        let summary = build_summary(
+            &[
+                CommitInfo {
+                    repo_name: "demo".to_string(),
+                    repo_path: "/tmp/demo".to_string(),
+                    hash: "1".to_string(),
+                    short_hash: "1".to_string(),
+                    author: "Raphael".to_string(),
+                    email: "raphael@example.com".to_string(),
+                    date: "2025-02-14".to_string(),
+                    subject: "feat: bump version".to_string(),
+                    summary: "将版本升级至0.1.3并同步更新说明文档与安装脚本".to_string(),
+                    body: String::new(),
+                    files: vec!["Cargo.toml".to_string()],
+                    files_display: "Cargo.toml".to_string(),
+                    modules: vec!["Cargo.toml".to_string()],
+                    modules_display: "Cargo.toml".to_string(),
+                },
+                CommitInfo {
+                    repo_name: "demo".to_string(),
+                    repo_path: "/tmp/demo".to_string(),
+                    hash: "2".to_string(),
+                    short_hash: "2".to_string(),
+                    author: "Raphael".to_string(),
+                    email: "raphael@example.com".to_string(),
+                    date: "2025-02-14".to_string(),
+                    subject: "fix: refresh lockfile".to_string(),
+                    summary: "为0.1.2版本发布刷新并校准项目依赖锁文件内容".to_string(),
+                    body: String::new(),
+                    files: vec!["Cargo.lock".to_string()],
+                    files_display: "Cargo.lock".to_string(),
+                    modules: vec!["Cargo.lock".to_string()],
+                    modules_display: "Cargo.lock".to_string(),
+                },
+            ],
+            &["Cargo.toml".to_string()],
+        );
+
+        assert_eq!(
+            summary.highlights,
+            vec!["同步完成版本升级、锁文件刷新与相关说明更新".to_string()]
+        );
+    }
+
+    #[test]
+    fn follow_up_commit_subject_is_not_treated_as_risk() {
+        assert_eq!(extract_risk("focus report follow-up plan items"), None);
+        assert_eq!(extract_risk("todo: follow up release"), Some("todo: follow up release".to_string()));
     }
 }
