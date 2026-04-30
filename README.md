@@ -136,7 +136,6 @@ daily_git update --version 0.1.0
 
 仓库里已经增加了 GitHub Actions 工作流 [`.github/workflows/release.yml`](.github/workflows/release.yml)，支持：
 
-- macOS Intel: `x86_64-apple-darwin`
 - macOS Apple Silicon: `aarch64-apple-darwin`
 - Linux x86_64: `x86_64-unknown-linux-gnu`
 - Windows x86_64: `x86_64-pc-windows-msvc`
@@ -152,6 +151,8 @@ git push origin v0.1.0
 
 - 对应平台的压缩包
 - `daily_git-installer.sh` 安装脚本
+
+当前官方 Release 不再构建 macOS Intel 包；如确有需求，建议开发者在 Intel 机器上本地编译，或后续单独恢复一个可用的 Intel runner 配置。
 
 对“在别的设备上获取这个工具”来说，这已经是最省事、维护成本最低的路径。
 
