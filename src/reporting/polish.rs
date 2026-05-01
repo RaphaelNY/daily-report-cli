@@ -295,6 +295,10 @@ fn simplify_subject(subject: &str) -> String {
         .filter(|rest| !rest.is_empty())
         .unwrap_or(trimmed);
 
+    if let Some(summary) = summarize_known_subject(normalized) {
+        return summary;
+    }
+
     let lowered = normalized.to_ascii_lowercase();
     let replacements = [
         ("add ", "新增"),
@@ -317,6 +321,68 @@ fn simplify_subject(subject: &str) -> String {
     }
 
     normalized.to_string()
+}
+
+fn summarize_known_subject(subject: &str) -> Option<String> {
+    let lowered = normalize_subject_key(subject);
+
+    if let Some(version) = lowered.strip_prefix("bump version to ") {
+        return Some(format!("更新版本至{}并同步相关说明", version.trim()));
+    }
+
+    if lowered.starts_with("refresh lockfile") {
+        return Some("刷新锁文件以匹配版本发布".to_string());
+    }
+
+    if lowered.starts_with("merge dated daily docs into weekly logs") {
+        return Some("整合按日期归档的日报到周报日志中".to_string());
+    }
+
+    if lowered.starts_with("separate report work summaries") {
+        return Some("拆分日报与周报中的工作摘要内容".to_string());
+    }
+
+    if lowered.starts_with("focus report follow-up plan items") {
+        return Some("聚焦报告中的后续计划条目表达".to_string());
+    }
+
+    if lowered.starts_with("refine report readability and reference output") {
+        return Some("优化报告可读性与参考输出内容".to_string());
+    }
+
+    if lowered.starts_with("avoid false positive report risks") {
+        return Some("避免报告风险项出现误判提示".to_string());
+    }
+
+    if lowered.starts_with("support multi-repo author-filtered reports") {
+        return Some("支持多仓库按作者筛选生成报告".to_string());
+    }
+
+    if lowered.starts_with("preserve unicode git paths in reports") {
+        return Some("保留报告中的 Unicode Git 路径".to_string());
+    }
+
+    if lowered.starts_with("add weekly html ppt deck generation") {
+        return Some("新增周报网页演示文稿生成能力".to_string());
+    }
+
+    if lowered.starts_with("drop macos intel release target") {
+        return Some("移除 macOS Intel 发布目标配置".to_string());
+    }
+
+    if lowered.starts_with("improve report generation readability") {
+        return Some("提升报告生成内容的整体可读性".to_string());
+    }
+
+    None
+}
+
+fn normalize_subject_key(subject: &str) -> String {
+    subject
+        .to_ascii_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn strip_code_fences(input: &str) -> &str {
@@ -512,7 +578,59 @@ mod tests {
 
         assert_eq!(
             fallback_summary(&commit),
-            "新增weekly html ppt deck generation（src）".to_string()
+            "新增周报网页演示文稿生成能力（src）".to_string()
+        );
+    }
+
+    #[test]
+    fn fallback_summary_normalizes_common_english_subjects() {
+        let commit = CommitInfo {
+            repo_name: "demo".to_string(),
+            repo_path: "/tmp/demo".to_string(),
+            hash: "abc".to_string(),
+            short_hash: "abc".to_string(),
+            author: "Alice".to_string(),
+            email: "alice@example.com".to_string(),
+            date: "2025-02-14".to_string(),
+            subject: "feat: support multi-repo author-filtered reports".to_string(),
+            summary: String::new(),
+            body: String::new(),
+            files: vec!["README.md".to_string()],
+            files_display: "README.md".to_string(),
+            files_compact_display: "README.md".to_string(),
+            modules: vec!["README.md".to_string()],
+            modules_display: "README.md".to_string(),
+        };
+
+        assert_eq!(
+            fallback_summary(&commit),
+            "支持多仓库按作者筛选生成报告（README.md）".to_string()
+        );
+    }
+
+    #[test]
+    fn fallback_summary_normalizes_version_bumps() {
+        let commit = CommitInfo {
+            repo_name: "demo".to_string(),
+            repo_path: "/tmp/demo".to_string(),
+            hash: "abc".to_string(),
+            short_hash: "abc".to_string(),
+            author: "Alice".to_string(),
+            email: "alice@example.com".to_string(),
+            date: "2025-02-14".to_string(),
+            subject: "chore: bump version to 0.1.5".to_string(),
+            summary: String::new(),
+            body: String::new(),
+            files: vec!["Cargo.toml".to_string()],
+            files_display: "Cargo.toml".to_string(),
+            files_compact_display: "Cargo.toml".to_string(),
+            modules: vec!["Cargo.toml".to_string()],
+            modules_display: "Cargo.toml".to_string(),
+        };
+
+        assert_eq!(
+            fallback_summary(&commit),
+            "更新版本至0.1.5并同步相关说明（Cargo.toml）".to_string()
         );
     }
 }
