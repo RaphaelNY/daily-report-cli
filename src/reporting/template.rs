@@ -131,15 +131,37 @@ fn build_work_items(commits: &[CommitInfo], modules: &[String], multi_repo: bool
         return Vec::new();
     }
 
+    let strong_module_count = modules
+        .iter()
+        .filter(|module| module_priority(module) >= 40)
+        .count();
+    let primary_module_count = modules
+        .iter()
+        .filter(|module| is_primary_work_module(module))
+        .count();
+
     struct WorkItemCandidate {
         module: String,
         item: String,
         commit_count: usize,
         has_non_routine: bool,
+        priority: i32,
     }
 
     let mut candidates = Vec::new();
     for module in modules {
+        if is_routine_module(module)
+            && modules
+                .iter()
+                .any(|item| !is_routine_module(item) && !is_peripheral_module(item))
+        {
+            continue;
+        }
+
+        if is_peripheral_module(module) && strong_module_count >= 4 {
+            continue;
+        }
+
         let related = commits
             .iter()
             .filter(|commit| commit.modules.iter().any(|item| item == module))
@@ -171,7 +193,13 @@ fn build_work_items(commits: &[CommitInfo], modules: &[String], multi_repo: bool
         let details = if summaries.is_empty() {
             "整理相关文件与提交记录".to_string()
         } else {
-            summaries
+            let mut prioritized = summaries.to_vec();
+            prioritized.sort_by(|left, right| {
+                summary_priority(right)
+                    .cmp(&summary_priority(left))
+                    .then_with(|| left.cmp(right))
+            });
+            prioritized
                 .iter()
                 .take(3)
                 .cloned()
@@ -198,6 +226,7 @@ fn build_work_items(commits: &[CommitInfo], modules: &[String], multi_repo: bool
             item,
             commit_count: related.len(),
             has_non_routine,
+            priority: module_priority(module),
         });
     }
 
@@ -205,15 +234,46 @@ fn build_work_items(commits: &[CommitInfo], modules: &[String], multi_repo: bool
         right
             .has_non_routine
             .cmp(&left.has_non_routine)
+            .then_with(|| right.priority.cmp(&left.priority))
             .then_with(|| right.commit_count.cmp(&left.commit_count))
             .then_with(|| left.module.cmp(&right.module))
     });
 
     let mut items = Vec::new();
     let mut seen = HashSet::new();
-    for candidate in candidates {
+
+    if primary_module_count >= 2 {
+        for candidate in &candidates {
+            if !is_primary_work_module(&candidate.module) {
+                continue;
+            }
+            if seen.insert(candidate.item.clone()) {
+                items.push(candidate.item.clone());
+            }
+            if items.len() >= 5 {
+                break;
+            }
+        }
+
+        if items.len() >= 2 {
+            return items;
+        }
+    }
+
+    for candidate in &candidates {
+        if seen.contains(&candidate.item) {
+            continue;
+        }
+
+        if primary_module_count >= 2
+            && (is_peripheral_module(&candidate.module) || is_routine_module(&candidate.module))
+            && !items.is_empty()
+        {
+            continue;
+        }
+
         if seen.insert(candidate.item.clone()) {
-            items.push(candidate.item);
+            items.push(candidate.item.clone());
         }
         if items.len() >= 5 {
             break;
@@ -285,6 +345,72 @@ fn is_routine_release_item(highlight: &str) -> bool {
         && !lowered.contains("多仓库")
         && !lowered.contains("报告")
         && !lowered.contains("模板")
+}
+
+fn is_routine_module(module: &str) -> bool {
+    matches!(module, "Cargo.lock" | "Cargo.toml" | "scripts")
+}
+
+fn is_peripheral_module(module: &str) -> bool {
+    matches!(module, "USAGE.md" | "github" | "gitignore")
+}
+
+fn is_primary_work_module(module: &str) -> bool {
+    matches!(module, "src" | "templates" | "docs" | "doc")
+}
+
+fn module_priority(module: &str) -> i32 {
+    match module {
+        "src" => 100,
+        "templates" => 95,
+        "README.md" => 70,
+        "config.yaml" => 60,
+        "scripts" => 50,
+        "docs" | "doc" => 45,
+        "USAGE.md" => 20,
+        "github" => 10,
+        "gitignore" => 5,
+        "Cargo.toml" => 0,
+        "Cargo.lock" => -5,
+        _ => {
+            if module.ends_with(".md") {
+                30
+            } else {
+                40
+            }
+        }
+    }
+}
+
+fn summary_priority(summary: &str) -> i32 {
+    let lowered = summary.to_ascii_lowercase();
+
+    if lowered.contains("新增")
+        || lowered.contains("实现")
+        || lowered.contains("整合")
+        || lowered.contains("拆分")
+        || lowered.contains("聚焦")
+        || lowered.contains("修复")
+        || lowered.contains("保留")
+        || lowered.contains("优化")
+        || lowered.contains("提升")
+    {
+        return 100;
+    }
+
+    if lowered.contains("支持多仓库") {
+        return 75;
+    }
+
+    if lowered.contains("更新版本") || lowered.contains("刷新锁文件") {
+        return 10;
+    }
+
+    if lowered.contains("发布目标配置") {
+        return 5;
+    }
+
+    50
 }
 
 fn extract_risk(text: &str) -> Option<String> {
