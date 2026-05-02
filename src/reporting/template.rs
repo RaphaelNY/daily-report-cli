@@ -114,7 +114,7 @@ fn build_summary(commits: &[CommitInfo], modules: &[String]) -> SummaryInfo {
             }
             acc
         });
-    let plan_items = build_plan_items(&highlights, modules, &risks);
+    let plan_items = build_plan_items(&highlights, &work_items, modules, &risks);
 
     SummaryInfo {
         highlights,
@@ -291,7 +291,12 @@ fn build_work_items(commits: &[CommitInfo], modules: &[String], multi_repo: bool
     items
 }
 
-fn build_plan_items(highlights: &[String], modules: &[String], risks: &[String]) -> Vec<String> {
+fn build_plan_items(
+    highlights: &[String],
+    work_items: &[String],
+    modules: &[String],
+    risks: &[String],
+) -> Vec<String> {
     if !risks.is_empty() {
         return risks
             .iter()
@@ -302,6 +307,21 @@ fn build_plan_items(highlights: &[String], modules: &[String], risks: &[String])
 
     let mut plans = Vec::new();
     let mut seen = HashSet::new();
+
+    for work_item in work_items {
+        let focus = extract_work_item_focus(work_item).unwrap_or_else(|| work_item.clone());
+        if should_skip_plan_focus(&focus, work_items) {
+            continue;
+        }
+        let item = format!("跟进“{focus}”的验证、联调与收尾工作");
+        if seen.insert(item.clone()) {
+            plans.push(item);
+        }
+
+        if plans.len() >= 5 {
+            return plans;
+        }
+    }
 
     for highlight in highlights {
         if is_routine_release_item(highlight) {
@@ -337,6 +357,31 @@ fn build_plan_items(highlights: &[String], modules: &[String], risks: &[String])
     }
 
     plans
+}
+
+fn extract_work_item_focus(work_item: &str) -> Option<String> {
+    let marker = "主要涉及：";
+    let details = work_item.split_once(marker)?.1.trim();
+    let first = details.split('；').next()?.trim();
+    if first.is_empty() {
+        None
+    } else {
+        Some(first.to_string())
+    }
+}
+
+fn should_skip_plan_focus(focus: &str, work_items: &[String]) -> bool {
+    let lowered = focus.to_ascii_lowercase();
+    let has_primary_focus = work_items.iter().any(|item| {
+        item.contains("`src`") || item.contains("`templates`") || item.contains("`docs`")
+    });
+
+    has_primary_focus
+        && (lowered.contains("readme.md")
+            || lowered.contains("config.yaml")
+            || lowered.contains("usage.md")
+            || lowered.contains("gitignore")
+            || lowered.contains("github"))
 }
 
 fn is_routine_release_item(highlight: &str) -> bool {
